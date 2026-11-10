@@ -210,36 +210,6 @@ private struct NoSpeechLightDrift: View {
     }
 }
 
-/// Side inset for the dictation capsule. Persistent recording and cancelled/Undo
-/// match the 7pt vertical pad so end controls sit in the hemispheres.
-/// Hold-to-talk keeps the wider 16pt cluster; command recording stays a card.
-enum DictationOverlayChrome {
-    static let compactSideInset: CGFloat = 7
-    static let wideSideInset: CGFloat = 16
-    static let iconSideInset: CGFloat = 10
-
-    static func horizontalPadding(
-        state: DictationOverlayViewModel.OverlayState,
-        sessionKind: DictationOverlayViewModel.SessionKind,
-        recordingMode: FnKeyStateMachine.RecordingMode,
-        isReady: Bool,
-        isIconOnly: Bool,
-        isNoSpeechExpanded: Bool
-    ) -> CGFloat {
-        if isReady { return compactSideInset }
-        if isIconOnly || isNoSpeechExpanded { return iconSideInset }
-        switch state {
-        case .cancelled:
-            return compactSideInset
-        case .recording:
-            guard sessionKind != .command else { return wideSideInset }
-            return recordingMode == .holdToTalk ? wideSideInset : compactSideInset
-        default:
-            return wideSideInset
-        }
-    }
-}
-
 /// The dictation overlay — compact dark capsule during dictation, wider card for errors.
 struct DictationOverlayView: View {
     /// Pill shape change between states. On a push-to-talk release the pill
@@ -317,56 +287,20 @@ struct DictationOverlayView: View {
             errorCard(message: message)
 
         default:
-            let isReady = if case .ready = viewModel.state { true } else { false }
-            // Processing (non-command) and success show a single icon — use equal
-            // padding so the Capsule background renders as a perfect circle, not
-            // an oval. noSpeech starts as a circle (matching processing) and then
-            // blooms into an oval once `noSpeechExpanded` flips — so its label
-            // reads cleanly on a full dark background after the expansion.
-            let isIconOnly: Bool = {
-                switch viewModel.state {
-                case .processing:
-                    return viewModel.sessionKind != .command && viewModel.visibleProcessingMessage == nil
-                case .formatting: return viewModel.sessionKind != .command
-                case .success: return true
-                case .noSpeech: return !noSpeechExpanded
-                default: return false
-                }
+            // Whether the no-speech pill has bloomed into its oval form;
+            // drives the farewell light drift, not the padding.
+            let isNoSpeechExpanded: Bool = {
+                if case .noSpeech = viewModel.state { return noSpeechExpanded }
+                return false
             }()
-            // noSpeech (expanded) uses tighter horizontal padding and smaller vertical
-            // padding than the circular phase, so the bloom animation stretches the
-            // 46×46 circle horizontally while also slimming down vertically into a
-            // low-profile terminal pill.
-            let isNoSpeechState = { if case .noSpeech = viewModel.state { return true } else { return false } }()
-            let isNoSpeechExpanded = isNoSpeechState && noSpeechExpanded
-            // Ready uses equal horizontal/vertical padding so the breathing
-            // ring sits inside a tight ~32×32 circular pill — distinctly
-            // smaller and lighter than the 46×46 processing / noSpeech
-            // circles, reinforcing that `.ready` is a brief, poised pause
-            // rather than active work.
-            //
-            // Persistent dictation recording and cancelled/Undo use the same
-            // 7pt side inset as the vertical padding so end controls sit in
-            // the capsule hemispheres. Hold-to-talk has no end circles and
-            // looked right at 16pt, so it stays wide. Command recording
-            // keeps 16pt — it's a text card.
-            let horizontalPadding = DictationOverlayChrome.horizontalPadding(
-                state: viewModel.state,
-                sessionKind: viewModel.sessionKind,
-                recordingMode: viewModel.recordingMode,
-                isReady: isReady,
-                isIconOnly: isIconOnly,
-                isNoSpeechExpanded: isNoSpeechExpanded
-            )
-            let verticalPadding: CGFloat = {
-                if isReady { return 7 }
-                if isIconOnly { return 10 }
-                if isNoSpeechExpanded { return 5 }
-                return 7
-            }()
+            // One padding for every state (16 horizontal / 10 vertical), so
+            // the pill keeps the same inset as it moves between Ready,
+            // Processing and No-Speech instead of resizing and re-centring.
+            // The noSpeech bloom still animates via its content: the label
+            // fades in as `noSpeechExpanded` flips.
             pillContent
-                .padding(.horizontal, horizontalPadding)
-                .padding(.vertical, verticalPadding)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .background(
                     Capsule()
                         .fill(DesignSystem.Colors.pillBackground)
@@ -643,10 +577,11 @@ struct DictationOverlayView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.white.opacity(isCancelHovered ? 1.0 : 0.9))
-                    .frame(width: 22, height: 22)
+                    .frame(width: 28, height: 28)
                     .background(Circle().fill(Color.white.opacity(isCancelHovered ? 0.35 : 0.2)))
             }
             .buttonStyle(.plain)
+            .help("Cancel dictation")
             .animation(.easeInOut(duration: 0.15), value: isCancelHovered)
 
             // Recording timer
@@ -663,14 +598,15 @@ struct DictationOverlayView: View {
             Button(action: { viewModel.onStop?() }) {
                 RoundedRectangle(cornerRadius: 2.5)
                     .fill(Color.white)
-                    .frame(width: 9, height: 9)
-                    .padding(7)
+                    .frame(width: 10, height: 10)
+                    .padding(9)
                     .background(
                         Circle().fill(isStopHovered ? Color.red.opacity(1.0) : Color.red.opacity(0.85))
                             .shadow(color: isStopHovered ? .red.opacity(0.5) : .clear, radius: 6)
                     )
             }
             .buttonStyle(.plain)
+            .help("Stop dictation")
             .scaleEffect(isStopHovered ? 1.1 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: isStopHovered)
         }

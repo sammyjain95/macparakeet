@@ -48,13 +48,21 @@ struct IdlePillView: View {
         }
         .frame(
             width: viewModel.isHovered ? 148 : 48,
-            height: viewModel.isHovered ? 30 : 10
+            height: viewModel.isHovered ? 30 : 28
         )
         .shadow(color: .black.opacity(0.3), radius: viewModel.isHovered ? 8 : 4, y: 4)
         .overlay {
             // Dots shown on hover inside the pill
             if viewModel.isHovered {
                 dotsRow
+                    .transition(.opacity)
+            } else {
+                // Collapsed pill keeps a mic glyph so the 48×28 pill reads
+                // as dictation and invites a click; without it the pill is
+                // an anonymous sliver with no affordance.
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
                     .transition(.opacity)
             }
         }

@@ -150,6 +150,10 @@ struct TranscribeView: View {
 
                         if speakerDetectionEnabled {
                             NextRunSpeakerCountMenu(selection: $viewModel.nextRunSpeakerSelection)
+                                // Centre under the two-card row: the menu is
+                                // intrinsically narrow, so pin it to the
+                                // row's centre rather than its leading edge.
+                                .frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
                     .padding(.horizontal, DesignSystem.Spacing.xl)
@@ -241,6 +245,7 @@ struct TranscribeView: View {
                                 .layoutPriority(1)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
+                                .frame(minHeight: 28)
                                 .background(
                                     Capsule()
                                         .fill(DesignSystem.Colors.cardBackground)
@@ -269,15 +274,22 @@ struct TranscribeView: View {
                         viewModel.transcribeURL()
                     } label: {
                         Label("Transcribe", systemImage: "arrow.right")
-                            .font(DesignSystem.Typography.caption.weight(.semibold))
-                            .foregroundStyle(DesignSystem.Colors.onAccent)
+                            .font(DesignSystem.Typography.body.weight(.semibold))
+                            .foregroundStyle(
+                                viewModel.isValidURL
+                                    ? DesignSystem.Colors.onAccent
+                                    : DesignSystem.Colors.textTertiary
+                            )
                             .lineLimit(1)
-                            .layoutPriority(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                             .background(
                                 RoundedRectangle(cornerRadius: DesignSystem.Layout.buttonCornerRadius)
-                                    .fill(viewModel.isValidURL ? DesignSystem.Colors.accent : DesignSystem.Colors.accent.opacity(0.35))
+                                    .fill(
+                                        viewModel.isValidURL
+                                            ? DesignSystem.Colors.accent
+                                            : DesignSystem.Colors.surfaceElevated
+                                    )
                             )
                     }
                     .buttonStyle(.plain)

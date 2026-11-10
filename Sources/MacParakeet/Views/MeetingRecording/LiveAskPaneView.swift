@@ -696,11 +696,11 @@ private struct AssistantTurnView: View {
             }
 
             if !isEmptyStreaming {
-                // Always rendered (reserves height so hover doesn't shift
-                // layout) but invisible until the assistant turn is hovered
-                // or one of its action buttons takes keyboard focus. Leading
-                // padding (head 18 + HStack spacing 12) keeps the actions row
-                // column-aligned with the prose above it.
+                // Always rendered and always visible (dimmed at rest, full
+                // on hover/focus) so the actions are discoverable without
+                // hovering. Reserves height so hover doesn't shift layout.
+                // Leading padding (head 18 + HStack spacing 12) keeps the
+                // actions row column-aligned with the prose above it.
                 AssistantMessageActions(
                     content: content,
                     showRegenerate: isLast,
@@ -709,8 +709,10 @@ private struct AssistantTurnView: View {
                     copied: $copied
                 )
                 .padding(.leading, 30)
-                .opacity(actionsVisible ? 1 : 0)
-                .allowsHitTesting(actionsVisible)
+                // Always visible (dimmed at rest) and always hit-testable:
+                // hover-only actions are undiscoverable and unreachable
+                // by keyboard/assistive access.
+                .opacity(actionsVisible ? 1 : 0.55)
                 .animation(.easeOut(duration: 0.12), value: actionsVisible)
             }
         }
@@ -755,9 +757,9 @@ private struct AssistantMessageActions: View {
                     .foregroundStyle(
                         copied
                             ? DesignSystem.Colors.successGreen.opacity(0.95)
-                            : DesignSystem.Colors.accent.opacity(copyHovered ? 0.95 : 0.55)
+                            : DesignSystem.Colors.accent.opacity(copyHovered ? 1.0 : 0.55)
                     )
-                    .frame(width: 16, height: 16)
+                    .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -771,9 +773,9 @@ private struct AssistantMessageActions: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(
-                            DesignSystem.Colors.accent.opacity(regenerateHovered ? 0.95 : 0.55)
+                            DesignSystem.Colors.accent.opacity(regenerateHovered ? 1.0 : 0.55)
                         )
-                        .frame(width: 16, height: 16)
+                        .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

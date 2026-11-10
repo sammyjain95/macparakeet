@@ -48,6 +48,16 @@ struct AskMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Assistant answers sit on a subtle surface so they read apart
+        // from the user's own messages at a glance; user messages stay
+        // on the plain background.
+        .padding(message.role == .assistant ? DesignSystem.Spacing.md : 0)
+        .background {
+            if message.role == .assistant {
+                RoundedRectangle(cornerRadius: DesignSystem.Layout.cardCornerRadius)
+                    .fill(DesignSystem.Colors.surfaceElevated)
+            }
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -65,7 +75,7 @@ struct AskMessageView: View {
         return Button {
             onCitation(reference)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Text("[\(index + 1)]")
                     .fontWeight(.semibold)
                 Text(reference.sourceTitle ?? "Source")
@@ -76,9 +86,10 @@ struct AskMessageView: View {
                         .fixedSize()
                 }
             }
-            .font(.caption)
+            .font(.caption2)
         }
         .parakeetAction(.secondary)
+        .controlSize(.small)
         .help("Open supporting passage")
         .accessibilityLabel(citationAccessibilityLabel(reference, index: index))
     }

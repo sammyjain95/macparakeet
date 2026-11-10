@@ -904,9 +904,10 @@ private struct TransformCard: View {
             cardActions
                 .padding(.top, DesignSystem.Spacing.md)
                 .padding(.trailing, DesignSystem.Spacing.md)
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-                .accessibilityHidden(!isHovered)
+                // Always visible (dimmed at rest) and always hit-testable:
+                // hover-only actions are undiscoverable and unreachable
+                // by keyboard/assistive access.
+                .opacity(isHovered ? 1 : 0.55)
                 .zIndex(1)
         }
         .onHover { isHovered = $0 }
@@ -964,6 +965,8 @@ private struct TransformCard: View {
         HStack(spacing: 4) {
             Button(action: onToggleMenuBar) {
                 Image(systemName: isVisibleInMenuBar ? "menubar.rectangle" : "eye.slash")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .parakeetAction(.subtle)
             .controlSize(.small)
@@ -977,6 +980,8 @@ private struct TransformCard: View {
             }
             Button(action: onDelete) {
                 Image(systemName: "trash")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .parakeetAction(.subtle)
             .controlSize(.small)

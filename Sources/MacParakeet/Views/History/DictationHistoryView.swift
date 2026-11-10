@@ -277,7 +277,9 @@ struct DictationHistoryView: View {
                         .animation(.linear(duration: 0.12), value: viewModel.playbackProgress)
                 }
             }
-            .frame(width: 140, height: DesignSystem.Layout.playbackBarHeight)
+            // Flexible width: at least 140pt, grows with the window
+            // instead of pinning the scrubber to a fixed slot.
+            .frame(minWidth: 140, maxWidth: .infinity, height: DesignSystem.Layout.playbackBarHeight)
 
             Text(viewModel.playbackTimeString)
                 .font(DesignSystem.Typography.timestamp)
@@ -294,7 +296,7 @@ struct DictationHistoryView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
-        .frame(height: 56)
+        .frame(height: 44)
         .background(
             Rectangle()
                 .fill(DesignSystem.Colors.surfaceElevated)

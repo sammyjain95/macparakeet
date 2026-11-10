@@ -10,10 +10,11 @@ struct StopRecordingButton: View {
     @State private var countdownProgress: CGFloat = 1.0
     @State private var revertTask: Task<Void, Never>?
 
-    // Match the idle circle's outer diameter (13pt square + 9pt padding × 2)
-    // so the "End now" pill occupies the same vertical box and the row above
-    // the tab bar doesn't reflow when toggling state.
-    private static let trackHeight: CGFloat = 31
+    // Idle stop is a 32×32 red-filled button with a white square, so it
+    // reads as "stop" at a glance instead of an unlabeled grey square.
+    // The confirming "End now" pill shares this vertical box so the row
+    // above the tab bar doesn't reflow when toggling state.
+    private static let trackHeight: CGFloat = 32
 
     var body: some View {
         Group {
@@ -52,25 +53,15 @@ struct StopRecordingButton: View {
                 Button {
                     beginConfirmation()
                 } label: {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(isHovered ? DesignSystem.Colors.errorRed : DesignSystem.Colors.textTertiary.opacity(0.6))
-                        .frame(width: 13, height: 13)
-                        .padding(9)
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
                         .background(
                             Circle()
-                                .fill(isHovered
-                                    ? DesignSystem.Colors.errorRed.opacity(0.15)
-                                    : DesignSystem.Colors.surfaceElevated
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            isHovered ? DesignSystem.Colors.errorRed.opacity(0.3) : .clear,
-                                            lineWidth: 0.5
-                                        )
-                                )
+                                .fill(DesignSystem.Colors.errorRed)
                         )
-                        .shadow(color: isHovered ? DesignSystem.Colors.errorRed.opacity(0.25) : .clear, radius: 6)
+                        .shadow(color: isHovered ? DesignSystem.Colors.errorRed.opacity(0.35) : .clear, radius: 6)
                         .scaleEffect(isHovered ? 1.08 : 1.0)
                         .animation(.easeOut(duration: 0.15), value: isHovered)
                 }

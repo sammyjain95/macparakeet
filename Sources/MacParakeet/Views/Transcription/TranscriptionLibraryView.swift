@@ -87,8 +87,17 @@ struct TranscriptionLibraryView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .accessibilityLabel("Library layout")
-                .frame(width: 76)
+                .frame(width: 76, height: 32)
                 .help(libraryLayoutMode == .grid ? "Switch to list view" : "Switch to grid view")
+
+                // Divider between the view preference (layout picker) and
+                // the actions, so the header reads as two groups.
+                if onManagePrompts != nil || showsSelectManyButton
+                    || (primaryActionTitle != nil && onPrimaryAction != nil)
+                {
+                    Divider()
+                        .frame(height: 28)
+                }
 
                 if let onManagePrompts {
                     LibraryManagePromptsButton(action: onManagePrompts)
@@ -1003,6 +1012,19 @@ struct TranscriptionLibraryView: View {
             .font(DesignSystem.Typography.bodySmall)
             .foregroundStyle(DesignSystem.Colors.textTertiary)
             .multilineTextAlignment(.center)
+            if isFilteredEmptyState {
+                // The empty state names clearing filters; make it a real
+                // action instead of a dead end.
+                Button("Clear filters") {
+                    clearFilters()
+                }
+                .parakeetAction(.secondary)
+            } else if let primaryActionTitle, let onPrimaryAction {
+                // Empty library: offer the same primary action as the
+                // header CTA instead of leaving the screen inert.
+                Button(primaryActionTitle, action: onPrimaryAction)
+                    .parakeetAction(.primary)
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1184,6 +1206,24 @@ struct TranscriptionLibraryView: View {
 
     private var hasLabelFilter: Bool {
         !viewModel.selectedMeetingLabelIDs.isEmpty
+    }
+
+    /// The empty state is filter-caused (rather than a genuinely empty
+    /// library) when any filter, search text, or label selection is active.
+    private var isFilteredEmptyState: Bool {
+        hasLabelFilter || !viewModel.searchText.isEmpty || viewModel.filter != .all
+    }
+
+    /// Reset every filter the view can reach, using only existing
+    /// view-model API. Labels have no bulk-clear method, so each selected
+    /// label is toggled off from a snapshot (toggling mutates the set).
+    private func clearFilters() {
+        viewModel.searchText = ""
+        viewModel.filter = .all
+        let selectedLabelIDs = viewModel.selectedMeetingLabelIDs
+        for id in selectedLabelIDs {
+            viewModel.toggleMeetingLabelFilter(id)
+        }
     }
 }
 

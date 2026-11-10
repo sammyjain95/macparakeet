@@ -211,49 +211,34 @@ struct MeetingRecordingPanelView: View {
 
     private var header: some View {
         VStack(spacing: DesignSystem.Spacing.xs) {
-            HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
-                if viewModel.showsAudioLevels {
-                    LiveAudioOrb(viewModel: viewModel)
-                } else {
-                    statusDot
+            // At the 360pt minimum width the single-row header truncates:
+            // when the row does not fit, the word count and mute move to a
+            // second row instead of clipping. All controls stay present.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
+                    headerLeading
+
+                    Spacer(minLength: 0)
+
+                    headerWordCount
+                    headerMute
+                    headerPause
+                    headerStop
                 }
 
-                Text(viewModel.statusTitle)
-                    .font(DesignSystem.Typography.bodySmall.weight(.semibold))
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
+                        headerLeading
 
-                if viewModel.showsElapsedTime {
-                    Text(viewModel.formattedElapsed)
-                        .font(DesignSystem.Typography.timestamp.monospacedDigit())
-                        .foregroundStyle(DesignSystem.Colors.textTertiary)
-                }
+                        Spacer(minLength: 0)
 
-                Spacer(minLength: 0)
-
-                if viewModel.wordCount > 0 {
-                    Text("\(viewModel.wordCount) words")
-                        .font(.system(size: 10, weight: .regular).monospacedDigit())
-                        .foregroundStyle(DesignSystem.Colors.textTertiary.opacity(0.8))
-                }
-
-                if viewModel.showsMicrophoneMuteControl {
-                    MeetingMicrophoneMuteButton(
-                        isMuted: viewModel.isMicrophoneMuted,
-                        isEnabled: viewModel.canToggleMicrophoneMute
-                    ) {
-                        viewModel.onMicrophoneMuteToggle?()
+                        headerPause
+                        headerStop
                     }
-                }
 
-                if viewModel.canTogglePause {
-                    PauseResumeButton(isPaused: viewModel.isPaused) {
-                        viewModel.onPauseToggle?()
-                    }
-                }
-
-                if viewModel.canStop {
-                    StopRecordingButton {
-                        viewModel.onStop?()
+                    HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
+                        headerWordCount
+                        headerMute
                     }
                 }
             }
@@ -282,6 +267,64 @@ struct MeetingRecordingPanelView: View {
         .padding(.vertical, DesignSystem.Spacing.sm)
     }
 
+    @ViewBuilder
+    private var headerLeading: some View {
+        if viewModel.showsAudioLevels {
+            LiveAudioOrb(viewModel: viewModel)
+        } else {
+            statusDot
+        }
+
+        Text(viewModel.statusTitle)
+            .font(DesignSystem.Typography.bodySmall.weight(.semibold))
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+
+        if viewModel.showsElapsedTime {
+            Text(viewModel.formattedElapsed)
+                .font(DesignSystem.Typography.timestamp.monospacedDigit())
+                .foregroundStyle(DesignSystem.Colors.textTertiary)
+        }
+    }
+
+    @ViewBuilder
+    private var headerWordCount: some View {
+        if viewModel.wordCount > 0 {
+            Text("\(viewModel.wordCount) words")
+                .font(.system(size: 10, weight: .regular).monospacedDigit())
+                .foregroundStyle(DesignSystem.Colors.textTertiary.opacity(0.8))
+        }
+    }
+
+    @ViewBuilder
+    private var headerMute: some View {
+        if viewModel.showsMicrophoneMuteControl {
+            MeetingMicrophoneMuteButton(
+                isMuted: viewModel.isMicrophoneMuted,
+                isEnabled: viewModel.canToggleMicrophoneMute
+            ) {
+                viewModel.onMicrophoneMuteToggle?()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var headerPause: some View {
+        if viewModel.canTogglePause {
+            PauseResumeButton(isPaused: viewModel.isPaused) {
+                viewModel.onPauseToggle?()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var headerStop: some View {
+        if viewModel.canStop {
+            StopRecordingButton {
+                viewModel.onStop?()
+            }
+        }
+    }
+
     var visibleSourceHealthChips: [MeetingSourceHealthChip] {
         viewModel.visibleSourceHealthWarnings
     }
@@ -291,22 +334,24 @@ struct MeetingRecordingPanelView: View {
         let hasContent = !viewModel.previewLines.isEmpty
 
         ZStack {
-            // Flower of life — always present, fades to watermark when text appears
-            VStack(spacing: DesignSystem.Spacing.md) {
-                if viewModel.canStop {
-                    BreathingSeedOfLifeView(
-                        freeze: viewModel.isPaused,
-                        quiet: viewModel.isTranscriptRosetteQuiet
-                    )
-                    .opacity(hasContent ? 0.15 : 1.0)
-                    .animation(.easeInOut(duration: 0.8), value: hasContent)
-                } else {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .light))
-                        .foregroundStyle(DesignSystem.Colors.textTertiary.opacity(0.5))
-                }
+            // Flower of life + empty state — only while there is no
+            // transcript text yet. Once lines arrive the rosette is gone
+            // entirely: at watermark opacity behind the text it read as
+            // decoration printed over the reading pane.
+            if !hasContent {
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    if viewModel.canStop {
+                        BreathingSeedOfLifeView(
+                            freeze: viewModel.isPaused,
+                            quiet: viewModel.isTranscriptRosetteQuiet
+                        )
+                        .animation(.easeInOut(duration: 0.8), value: hasContent)
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 20, weight: .light))
+                            .foregroundStyle(DesignSystem.Colors.textTertiary.opacity(0.5))
+                    }
 
-                if !hasContent {
                     VStack(spacing: 5) {
                         Text(viewModel.transcriptEmptyStateTitle)
                             .font(.system(size: 13, weight: .light, design: .default))
@@ -324,9 +369,9 @@ struct MeetingRecordingPanelView: View {
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                     .transition(.opacity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
 
             // Native NSTextView — full drag selection, performant
             if hasContent {
@@ -334,6 +379,9 @@ struct MeetingRecordingPanelView: View {
                     lines: viewModel.previewLines,
                     autoScroll: autoScroll
                 )
+                // Clear the tab bar above: without this the first line
+                // starts half-hidden under it.
+                .padding(.top, DesignSystem.Spacing.sm)
             }
         }
         .background(DesignSystem.Colors.background)

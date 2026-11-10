@@ -67,8 +67,10 @@ struct TranscriptionThumbnailCard<MenuContent: View>: View {
         }
         .overlay(alignment: .topTrailing) {
             moreButton
-                .opacity(hovered ? 1 : 0)
-                .allowsHitTesting(hovered)
+                // Always visible (dimmed at rest, full on hover) and always
+                // hit-testable: a hover-only menu is undiscoverable and
+                // unreachable by keyboard/assistive access.
+                .opacity(moreHovered ? 1 : 0.55)
         }
         .accessibilityValue(showsSelectionControls ? (isSelected ? "Selected" : "Not selected") : "")
         .accessibilityHint(showsSelectionControls ? "Toggles selection" : "Opens transcription")
@@ -83,7 +85,7 @@ struct TranscriptionThumbnailCard<MenuContent: View>: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 26, height: 26)
+                .frame(width: 32, height: 32)
                 .background(
                     Circle()
                         .fill(.black.opacity(moreHovered ? 0.85 : 0.5))

@@ -63,20 +63,17 @@ struct DictationStatsView: View {
             HeroStatTile(
                 label: "Total words",
                 value: stats.totalWords.compactFormatted,
-                subtitle: wordsSubtitle(stats),
-                accent: true
+                subtitle: wordsSubtitle(stats)
             )
             HeroStatTile(
                 label: "Voice speed",
                 value: stats.averageWPM.formattedWPM,
-                subtitle: wpmDescriptor(stats.averageWPM),
-                accent: false
+                subtitle: wpmDescriptor(stats.averageWPM)
             )
             HeroStatTile(
                 label: "Time speaking",
                 value: stats.totalDurationMs.friendlyDuration,
-                subtitle: timeSpeakingSubtitle(stats),
-                accent: false
+                subtitle: timeSpeakingSubtitle(stats)
             )
         }
     }
@@ -137,8 +134,15 @@ struct DictationStatsView: View {
                     .monospacedDigit()
             }
 
-            StreakHeatmap(days: viewModel.dailyStats)
-                .frame(maxWidth: .infinity, alignment: .center)
+            GeometryReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    StreakHeatmap(days: viewModel.dailyStats)
+                        // Centre the grid when the card is wider than it,
+                        // scroll it when narrower — never clip.
+                        .frame(minWidth: proxy.size.width, alignment: .center)
+                }
+            }
+            .frame(height: StreakHeatmap.gridHeight)
 
             HStack(spacing: 8) {
                 Text("Less")
@@ -251,10 +255,6 @@ private struct HeroStatTile: View {
     let label: String
     let value: String
     let subtitle: String
-    /// When true, the hero value is rendered in the brand accent.
-    /// Reserved for the lead tile only — three accented values would
-    /// flatten the visual hierarchy.
-    let accent: Bool
 
     @State private var isHovered = false
 
@@ -265,7 +265,9 @@ private struct HeroStatTile: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(accent ? DesignSystem.Colors.accent : Color.primary)
+                // All three values share one colour; the orange accent is
+                // reserved for the streak number below.
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
                 .contentTransition(.numericText())
                 .monospacedDigit()
                 .lineLimit(1)
@@ -331,7 +333,13 @@ struct StreakHeatmap: View {
     fileprivate static let cellSize: CGFloat = 16
     fileprivate static let cellSpacing: CGFloat = 4
     private let weekdayLabelWidth: CGFloat = 28
-    private let monthLabelHeight: CGFloat = 14
+    private static let monthLabelHeight: CGFloat = 14
+
+    /// Fixed height of the heatmap grid (month labels + 7 day rows).
+    /// The card sizes its horizontal scroll container from this so the
+    /// grid never clips and never leaves a gap.
+    static let gridHeight: CGFloat =
+        monthLabelHeight + cellSpacing + 7 * cellSize + 6 * cellSpacing
 
     var body: some View {
         let columns = buildColumns()
@@ -343,7 +351,7 @@ struct StreakHeatmap: View {
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(
                     width: CGFloat(columns.count) * Self.cellSize + CGFloat(max(0, columns.count - 1)) * Self.cellSpacing,
-                    height: monthLabelHeight
+                    height: Self.monthLabelHeight
                 )
                 ForEach(boundaries, id: \.col) { boundary in
                     Text(boundary.label)
