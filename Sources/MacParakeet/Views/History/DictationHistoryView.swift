@@ -279,7 +279,8 @@ struct DictationHistoryView: View {
             }
             // Flexible width: at least 140pt, grows with the window
             // instead of pinning the scrubber to a fixed slot.
-            .frame(minWidth: 140, maxWidth: .infinity, height: DesignSystem.Layout.playbackBarHeight)
+            .frame(minWidth: 140, maxWidth: .infinity)
+            .frame(height: DesignSystem.Layout.playbackBarHeight)
 
             Text(viewModel.playbackTimeString)
                 .font(DesignSystem.Typography.timestamp)
