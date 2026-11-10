@@ -460,6 +460,14 @@ struct AskWorkspaceView: View {
             }
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+            // Send is disabled with no explanation when no sources are
+            // selected; say so inline, only in that state.
+            if model.conversation?.activeSection?.sourceIDs.isEmpty ?? true {
+                Text("Select a source to ask")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack {
                 if let provider = model.provider {
                     Text("\(provider.name) · \(provider.model)")

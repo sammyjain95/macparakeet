@@ -1144,181 +1144,24 @@ struct TranscriptResultView: View {
     // MARK: - Action Bar
 
     private var actionBar: some View {
-        HStack(spacing: DesignSystem.Spacing.sm) {
-            copyAction
+        // At narrow widths the bar wraps instead of clipping: the
+        // single-row form is used when it fits, otherwise the actions
+        // flow onto a second line (same buttons, same order).
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                actionBarLeadingActions
 
-            Button {
-                showingExportOptions.toggle()
-            } label: {
-                Label("Export", systemImage: "arrow.down.doc")
-            }
-            .parakeetAction(.secondary)
-            .accessibilityIdentifier("transcript-export-options")
-            .popover(isPresented: $showingExportOptions, arrowEdge: .top) {
-                exportOptionsPopover
+                Spacer()
+
+                newTranscriptionAction
             }
 
-            if let sharing = shareManagement, AppFeatures.isShareLinksAvailable() {
-                Button { prepareShare(using: sharing) } label: { Label("Share…", systemImage: "square.and.arrow.up") }
-                    .parakeetAction(.secondary)
-                    .disabled(
-                        preparingShare || sharing.isBusy || !sharing.isConfigured
-                            || editingTranscript || editingReadingTranscript || editingTitle
-                    )
-                    .help("Preview and publish an encrypted, expiring text-only page")
-            }
-
-            if activeTranscription.sourceType == .meeting {
-                let audioState = MeetingAudioFile.state(for: activeTranscription)
-                let audioAvailable = audioState == .saved
-                let audioRemovable = MeetingAudioFile.isRemovable(for: activeTranscription, state: audioState)
-                Menu {
-                    Button {
-                        MeetingAudioActions.revealInFinder(activeTranscription)
-                    } label: {
-                        Label("Show Audio in Finder", systemImage: "waveform")
-                    }
-                    Button {
-                        saveMeetingAudioFromActionBar()
-                    } label: {
-                        Label("Save Audio As…", systemImage: "square.and.arrow.down")
-                    }
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        pendingDeleteMeetingAudio = true
-                    } label: {
-                        Label(MeetingDeletionCopy.audioOnlyMenuTitle, systemImage: "waveform.slash")
-                    }
-                    .disabled(!audioRemovable)
-                    .help(
-                        audioRemovable
-                            ? "Remove the saved meeting audio while keeping the meeting"
-                            : MeetingDeletionCopy.audioRemovalUnavailableHelp(
-                                for: activeTranscription,
-                                state: audioState
-                            ))
-                } label: {
-                    Label("Audio", systemImage: "waveform")
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                FlowLayout(spacing: DesignSystem.Spacing.sm) {
+                    actionBarLeadingActions
                 }
-                .parakeetAction(.secondary)
-                .disabled(!audioAvailable)
-                .help(
-                    audioAvailable
-                        ? "Reveal or save the meeting audio file"
-                        : MeetingDeletionCopy.audioUnavailableHelp(for: audioState))
 
-                let artifactAvailable = MeetingArtifactActions.folderURL(for: activeTranscription) != nil
-                Menu {
-                    Button {
-                        MeetingArtifactActions.openFolder(for: activeTranscription)
-                    } label: {
-                        Label("Open Meeting Folder", systemImage: "folder")
-                    }
-
-                    Button {
-                        MeetingArtifactActions.copyFolderPath(for: activeTranscription)
-                    } label: {
-                        Label("Copy Artifact Folder Path", systemImage: "doc.on.doc")
-                    }
-                } label: {
-                    Label("Artifacts", systemImage: "folder")
-                }
-                .parakeetAction(.secondary)
-                .disabled(!artifactAvailable)
-                .help(
-                    artifactAvailable
-                        ? "Open or copy the meeting artifact folder path"
-                        : "Meeting artifact folder is not available")
-
-                if meetingSplitViewModel != nil, let provenance = activeTranscription.splitProvenance {
-                    Button("View split progress…") {
-                        if playerViewModel.isPlaying { playerViewModel.togglePlayPause() }
-                        splitOperationId = provenance.operationId
-                        isPresentingSplitSheet = true
-                    }
-                    .parakeetAction(.secondary)
-                }
-                if meetingSplitViewModel != nil, MeetingSplitEligibility.isEligible(activeTranscription) {
-                    Button {
-                        if playerViewModel.isPlaying {
-                            playerViewModel.togglePlayPause()
-                        }
-                        splitOperationId = nil
-                        isPresentingSplitSheet = true
-                    } label: {
-                        Label("Split and Transcribe…", systemImage: "square.split.2x1")
-                    }
-                    .parakeetAction(.secondary)
-                    .help("Split this recording into independent parts, each transcribed on its own")
-                }
-            }
-
-            if onRetranscribe != nil, let filePath = activeTranscription.filePath,
-                TranscriptDetailActionAvailability.canRetranscribe(
-                    hasRetainedAudio: FileManager.default.fileExists(atPath: filePath),
-                    status: activeTranscription.status
-                )
-            {
-                let engineOption = viewModel.retranscriptionEngineOption(for: activeTranscription)
-                Button {
-                    let source = activeTranscription
-                    let viewModel = viewModel
-                    Task { @MainActor in
-                        let canConfigureSpeakers = await Task.detached(priority: .userInitiated) {
-                            viewModel.canConfigureSpeakersForRetranscription(source)
-                        }.value
-                        guard activeTranscription.id == source.id else { return }
-                        retranscriptionCanConfigureSpeakers = canConfigureSpeakers
-                        if engineOption != nil || canConfigureSpeakers {
-                            selectedRetranscriptionSpeechEngineOverride = nil
-                            retranscriptionExactSpeakerCount = min(
-                                max(defaultRetranscriptionSpeakerCount, SpeakerCountSelection.supportedExactCount.lowerBound),
-                                SpeakerCountSelection.supportedExactCount.upperBound
-                            )
-                            showingRetranscribeOptions.toggle()
-                        } else {
-                            retranscriptionConfirmation = RetranscriptionConfirmation(
-                                transcriptionID: activeTranscription.id,
-                                speechEngineOverride: nil,
-                                speakerSelection: nil,
-                                countsOtherSpeakers: false,
-                                resetsSpeakerCorrections: viewModel.speakerCorrectionsApplied
-                            )
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.trianglehead.2.clockwise")
-                        Text("Retranscribe")
-                        if engineOption != nil {
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 2)
-                        }
-                    }
-                }
-                .parakeetAction(.secondary)
-                .help(engineOption != nil ? "Choose a speech engine for this rerun" : "Retranscribe this file")
-                .popover(isPresented: $showingRetranscribeOptions, arrowEdge: .top) {
-                    retranscribeOptionsPopover(
-                        for: engineOption,
-                        canConfigureSpeakers: retranscriptionCanConfigureSpeakers
-                    )
-                }
-            }
-
-            Spacer()
-
-            if onStartNew != nil {
-                Button {
-                    requestMeetingNotesNavigation(.startNewTranscription)
-                } label: {
-                    Label("New Transcription", systemImage: "plus")
-                }
-                .parakeetAction(.primary)
+                newTranscriptionAction
             }
         }
         .padding(DesignSystem.Spacing.md)
@@ -1388,6 +1231,186 @@ struct TranscriptResultView: View {
                     initialOperationId: splitOperationId
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private var actionBarLeadingActions: some View {
+        copyAction
+
+        Button {
+            showingExportOptions.toggle()
+        } label: {
+            Label("Export", systemImage: "arrow.down.doc")
+        }
+        .parakeetAction(.secondary)
+        .accessibilityIdentifier("transcript-export-options")
+        .popover(isPresented: $showingExportOptions, arrowEdge: .top) {
+            exportOptionsPopover
+        }
+
+        if let sharing = shareManagement, AppFeatures.isShareLinksAvailable() {
+            Button { prepareShare(using: sharing) } label: { Label("Share…", systemImage: "square.and.arrow.up") }
+                .parakeetAction(.secondary)
+                .disabled(
+                    preparingShare || sharing.isBusy || !sharing.isConfigured
+                        || editingTranscript || editingReadingTranscript || editingTitle
+                )
+                .help("Preview and publish an encrypted, expiring text-only page")
+        }
+
+        if activeTranscription.sourceType == .meeting {
+            let audioState = MeetingAudioFile.state(for: activeTranscription)
+            let audioAvailable = audioState == .saved
+            let audioRemovable = MeetingAudioFile.isRemovable(for: activeTranscription, state: audioState)
+            Menu {
+                Button {
+                    MeetingAudioActions.revealInFinder(activeTranscription)
+                } label: {
+                    Label("Show Audio in Finder", systemImage: "waveform")
+                }
+                Button {
+                    saveMeetingAudioFromActionBar()
+                } label: {
+                    Label("Save Audio As…", systemImage: "square.and.arrow.down")
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    pendingDeleteMeetingAudio = true
+                } label: {
+                    Label(MeetingDeletionCopy.audioOnlyMenuTitle, systemImage: "waveform.slash")
+                }
+                .disabled(!audioRemovable)
+                .help(
+                    audioRemovable
+                        ? "Remove the saved meeting audio while keeping the meeting"
+                        : MeetingDeletionCopy.audioRemovalUnavailableHelp(
+                            for: activeTranscription,
+                            state: audioState
+                        ))
+            } label: {
+                Label("Audio", systemImage: "waveform")
+            }
+            .parakeetAction(.secondary)
+            .disabled(!audioAvailable)
+            .help(
+                audioAvailable
+                    ? "Reveal or save the meeting audio file"
+                    : MeetingDeletionCopy.audioUnavailableHelp(for: audioState))
+
+            let artifactAvailable = MeetingArtifactActions.folderURL(for: activeTranscription) != nil
+            Menu {
+                Button {
+                    MeetingArtifactActions.openFolder(for: activeTranscription)
+                } label: {
+                    Label("Open Meeting Folder", systemImage: "folder")
+                }
+
+                Button {
+                    MeetingArtifactActions.copyFolderPath(for: activeTranscription)
+                } label: {
+                    Label("Copy Artifact Folder Path", systemImage: "doc.on.doc")
+                }
+            } label: {
+                Label("Artifacts", systemImage: "folder")
+            }
+            .parakeetAction(.secondary)
+            .disabled(!artifactAvailable)
+            .help(
+                artifactAvailable
+                    ? "Open or copy the meeting artifact folder path"
+                    : "Meeting artifact folder is not available")
+
+            if meetingSplitViewModel != nil, let provenance = activeTranscription.splitProvenance {
+                Button("View split progress…") {
+                    if playerViewModel.isPlaying { playerViewModel.togglePlayPause() }
+                    splitOperationId = provenance.operationId
+                    isPresentingSplitSheet = true
+                }
+                .parakeetAction(.secondary)
+            }
+            if meetingSplitViewModel != nil, MeetingSplitEligibility.isEligible(activeTranscription) {
+                Button {
+                    if playerViewModel.isPlaying {
+                        playerViewModel.togglePlayPause()
+                    }
+                    splitOperationId = nil
+                    isPresentingSplitSheet = true
+                } label: {
+                    Label("Split and Transcribe…", systemImage: "square.split.2x1")
+                }
+                .parakeetAction(.secondary)
+                .help("Split this recording into independent parts, each transcribed on its own")
+            }
+        }
+
+        if onRetranscribe != nil, let filePath = activeTranscription.filePath,
+            TranscriptDetailActionAvailability.canRetranscribe(
+                hasRetainedAudio: FileManager.default.fileExists(atPath: filePath),
+                status: activeTranscription.status
+            )
+        {
+            let engineOption = viewModel.retranscriptionEngineOption(for: activeTranscription)
+            Button {
+                let source = activeTranscription
+                let viewModel = viewModel
+                Task { @MainActor in
+                    let canConfigureSpeakers = await Task.detached(priority: .userInitiated) {
+                        viewModel.canConfigureSpeakersForRetranscription(source)
+                    }.value
+                    guard activeTranscription.id == source.id else { return }
+                    retranscriptionCanConfigureSpeakers = canConfigureSpeakers
+                    if engineOption != nil || canConfigureSpeakers {
+                        selectedRetranscriptionSpeechEngineOverride = nil
+                        retranscriptionExactSpeakerCount = min(
+                            max(defaultRetranscriptionSpeakerCount, SpeakerCountSelection.supportedExactCount.lowerBound),
+                            SpeakerCountSelection.supportedExactCount.upperBound
+                        )
+                        showingRetranscribeOptions.toggle()
+                    } else {
+                        retranscriptionConfirmation = RetranscriptionConfirmation(
+                            transcriptionID: activeTranscription.id,
+                            speechEngineOverride: nil,
+                            speakerSelection: nil,
+                            countsOtherSpeakers: false,
+                            resetsSpeakerCorrections: viewModel.speakerCorrectionsApplied
+                        )
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.trianglehead.2.clockwise")
+                    Text("Retranscribe")
+                    if engineOption != nil {
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 2)
+                    }
+                }
+            }
+            .parakeetAction(.secondary)
+            .help(engineOption != nil ? "Choose a speech engine for this rerun" : "Retranscribe this file")
+            .popover(isPresented: $showingRetranscribeOptions, arrowEdge: .top) {
+                retranscribeOptionsPopover(
+                    for: engineOption,
+                    canConfigureSpeakers: retranscriptionCanConfigureSpeakers
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var newTranscriptionAction: some View {
+        if onStartNew != nil {
+            Button {
+                requestMeetingNotesNavigation(.startNewTranscription)
+            } label: {
+                Label("New Transcription", systemImage: "plus")
+            }
+            .parakeetAction(.primary)
         }
     }
 
@@ -1777,11 +1800,23 @@ struct TranscriptResultView: View {
                     style: .fullColor
                 )
 
-                // Expand/collapse chevron
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(DesignSystem.Colors.textTertiary)
-                    .rotationEffect(.degrees(headerExpanded ? 180 : 0))
+                // Expand/collapse chevron: a real button, so taps on it
+                // (and only it) toggle the header; the rest of the card
+                // no longer swallows taps on Back or the source link.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        headerExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(DesignSystem.Colors.textTertiary)
+                        .rotationEffect(.degrees(headerExpanded ? 180 : 0))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(headerExpanded ? "Collapse header" : "Expand header")
             }
             .padding(.horizontal, DesignSystem.Spacing.md)
             .padding(.vertical, DesignSystem.Spacing.sm)
@@ -1887,12 +1922,6 @@ struct TranscriptResultView: View {
                 .padding(.bottom, DesignSystem.Spacing.sm)
                 .padding(.leading, onBack != nil ? 36 + DesignSystem.Spacing.sm : 0)
                 .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                headerExpanded.toggle()
             }
         }
         .background(
@@ -2686,12 +2715,14 @@ struct TranscriptResultView: View {
     /// Compact A−/A+ control for the transcript reading size. Lives in the pane
     /// header; hidden while editing (editing uses the raw text editor).
     private var transcriptFontSizeControl: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 8) {
             Button {
                 adjustTranscriptFontScale(by: -Self.transcriptFontScaleStep)
             } label: {
                 Image(systemName: "textformat.size.smaller")
                     .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(clampedTranscriptFontScale <= Self.transcriptFontScaleRange.lowerBound + 0.001)
@@ -2703,6 +2734,8 @@ struct TranscriptResultView: View {
             } label: {
                 Image(systemName: "textformat.size.larger")
                     .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(clampedTranscriptFontScale >= Self.transcriptFontScaleRange.upperBound - 0.001)
@@ -6301,7 +6334,7 @@ struct TranscriptResultView: View {
             }
         }
         .padding(DesignSystem.Spacing.md)
-        .frame(width: 380)
+        .frame(width: 390)
     }
 
     /// An export option toggle that shows its *effective* state. When the option

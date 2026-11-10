@@ -727,7 +727,7 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: 260)
+                    .frame(width: 240)
                     .accessibilityHint("Choose whether MacParakeet follows macOS or uses a fixed light or dark appearance.")
                 }
 
@@ -758,35 +758,43 @@ struct SettingsView: View {
     }
 
     private var captureMicrophoneStrip: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            SettingsMicrophoneHeader(
-                microphoneGranted: viewModel.microphoneGranted,
-                statusText: viewModel.selectedMicrophoneStatusText
-            ) {
-                HStack(spacing: DesignSystem.Spacing.sm) {
-                    if !viewModel.microphoneGranted {
-                        microphonePermissionActionButton
-                    }
-
-                    Picker("Microphone", selection: $viewModel.selectedMicrophoneDeviceUID) {
-                        Text("System Default").tag(SettingsViewModel.systemDefaultMicrophoneSelection)
-                        ForEach(viewModel.microphoneDeviceOptions) { device in
-                            Text(device.displayName).tag(device.uid)
-                                .disabled(!device.isAvailable)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
-
-                    Button {
-                        viewModel.refreshMicrophoneDevices()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .parakeetAction(.secondary)
-                    .help("Refresh microphones")
-                    .accessibilityLabel("Refresh microphones")
+        // Built on the shared SettingsCard instead of a hand-rolled card
+        // shell, so its padding, border, shadow and hover match every
+        // other settings card. The header's status chip moves into the
+        // card's status slot; the picker/refresh controls and the level
+        // meter row are the card body.
+        SettingsCard(
+            title: "Microphone",
+            subtitle: viewModel.selectedMicrophoneStatusText,
+            icon: "mic",
+            status: SettingsCardStatus(
+                viewModel.microphoneGranted ? .ok : .required,
+                label: viewModel.microphoneGranted ? "Granted" : "Permission required"
+            )
+        ) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                if !viewModel.microphoneGranted {
+                    microphonePermissionActionButton
                 }
+
+                Picker("Microphone", selection: $viewModel.selectedMicrophoneDeviceUID) {
+                    Text("System Default").tag(SettingsViewModel.systemDefaultMicrophoneSelection)
+                    ForEach(viewModel.microphoneDeviceOptions) { device in
+                        Text(device.displayName).tag(device.uid)
+                            .disabled(!device.isAvailable)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 240)
+
+                Button {
+                    viewModel.refreshMicrophoneDevices()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .parakeetAction(.secondary)
+                .help("Refresh microphones")
+                .accessibilityLabel("Refresh microphones")
             }
 
             Divider()
@@ -821,18 +829,6 @@ struct SettingsView: View {
                 .help(microphoneTestDetail)
             }
         }
-        .padding(.horizontal, DesignSystem.Spacing.lg)
-        .padding(.vertical, DesignSystem.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.Layout.cardCornerRadius)
-                .fill(DesignSystem.Colors.cardBackground)
-                .cardShadow(DesignSystem.Shadows.cardRest)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.Layout.cardCornerRadius)
-                .strokeBorder(DesignSystem.Colors.border.opacity(0.6), lineWidth: 0.5)
-        )
     }
 
     private var captureWorkflowSwitcher: some View {
@@ -1257,7 +1253,7 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .frame(width: 140)
+                        .frame(width: 240)
                     }
                 }
 
@@ -1397,7 +1393,7 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                    .frame(width: 240)
                 }
 
                 Divider()
@@ -1719,7 +1715,7 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .frame(minWidth: 170, idealWidth: 210, maxWidth: 260)
+                    .frame(width: 240)
                 }
 
                 Divider()
@@ -1932,7 +1928,7 @@ struct SettingsView: View {
                     }
                 }
                 .labelsHidden()
-                .frame(width: 200)
+                .frame(width: 240)
             }
 
             HStack {
@@ -2106,7 +2102,7 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-                .frame(width: 250)
+                .frame(width: 240)
             }
 
             if viewModel.meetingAudioRetention.mode == .deleteAfterDays {
@@ -2585,7 +2581,7 @@ struct SettingsView: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .tint(DesignSystem.Colors.accent)
-                        .frame(minWidth: 190, idealWidth: 210, maxWidth: 240)
+                        .frame(width: 240)
                         .disabled(viewModel.engine.speechEngineSwitching)
                         .accessibilityLabel("Engine for recordings and files")
                         .accessibilityHint(
@@ -4373,54 +4369,6 @@ struct SettingsView: View {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
-    }
-}
-
-struct SettingsMicrophoneHeader<Controls: View>: View {
-    let microphoneGranted: Bool
-    let statusText: String
-    @ViewBuilder var controls: () -> Controls
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: DesignSystem.Spacing.md) {
-                    heading
-                    Spacer(minLength: DesignSystem.Spacing.md)
-                    controls()
-                }
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                    heading
-                    controls()
-                }
-            }
-            Text(statusText)
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var heading: some View {
-        HStack(spacing: DesignSystem.Spacing.sm) {
-            Image(systemName: "mic")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(DesignSystem.Colors.accent)
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(DesignSystem.Colors.accent.opacity(0.12))
-                )
-                .accessibilityHidden(true)
-            Text("Microphone")
-                .font(DesignSystem.Typography.body.weight(.semibold))
-            SettingsStatusChip(
-                status: microphoneGranted ? .ok : .required,
-                label: microphoneGranted ? "Granted" : "Permission required"
-            )
-        }
-        .fixedSize()
     }
 }
 

@@ -53,6 +53,8 @@ private struct TranscriptReadingPassageRow: View {
                     Image(systemName: "minus.circle")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("Remove passage")

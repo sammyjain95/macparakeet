@@ -200,6 +200,8 @@ struct EditIconButton: View {
             Image(systemName: "pencil")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(hovered ? DesignSystem.Colors.accent : .secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
@@ -222,6 +224,8 @@ struct DeleteIconButton: View {
             Image(systemName: "trash")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(hovered ? DesignSystem.Colors.errorRed : .secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }

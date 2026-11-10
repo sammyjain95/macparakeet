@@ -212,7 +212,7 @@ struct TranscriptFindBar: View {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(canNavigate ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.textTertiary)
-                .frame(width: 20, height: 20)
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

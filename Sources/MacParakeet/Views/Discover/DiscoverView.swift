@@ -94,10 +94,12 @@ struct DiscoverView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(isCopied ? DesignSystem.Colors.successGreen : DesignSystem.Colors.textTertiary)
                             .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help(isCopied ? "Copied" : "Copy to clipboard")
-                    .opacity(isHovered || isCopied ? 1 : 0)
+                    .opacity(isHovered || isCopied ? 1 : 0.55)
                 }
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {

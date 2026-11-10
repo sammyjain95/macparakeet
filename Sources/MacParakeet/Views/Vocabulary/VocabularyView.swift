@@ -190,7 +190,7 @@ struct VocabularyView: View {
                 dividerLine
 
                 pipelineStep(
-                    number: 2,
+                    number: 3,
                     title: "Fix words",
                     detail: "Apply your enabled word corrections"
                 )
@@ -198,7 +198,7 @@ struct VocabularyView: View {
                 dividerLine
 
                 pipelineStep(
-                    number: 3,
+                    number: 4,
                     title: "Expand snippets",
                     detail: "Replace spoken phrases with your saved text"
                 )
@@ -210,7 +210,7 @@ struct VocabularyView: View {
                 dividerLine
 
                 pipelineStep(
-                    number: 5,
+                    number: 6,
                     title: "Shape text",
                     detail: "Spacing, casing, and ending punctuation"
                 )
@@ -234,7 +234,7 @@ struct VocabularyView: View {
 
     private var fillerRemovalRow: some View {
         HStack(alignment: .top, spacing: DesignSystem.Spacing.md) {
-            Text("1")
+            Text("2")
                 .font(DesignSystem.Typography.caption.weight(.semibold))
                 .foregroundStyle(DesignSystem.Colors.accent)
                 .frame(width: 24, height: 24)
@@ -268,8 +268,8 @@ struct VocabularyView: View {
 
     private var insertionStyleRow: some View {
         HStack(alignment: .center, spacing: DesignSystem.Spacing.md) {
-            Image(systemName: "text.cursor")
-                .font(.system(size: 14, weight: .semibold))
+            Text("1")
+                .font(DesignSystem.Typography.caption.weight(.semibold))
                 .foregroundStyle(DesignSystem.Colors.accent)
                 .frame(width: 24, height: 24)
                 .background(
@@ -316,7 +316,7 @@ struct VocabularyView: View {
 
     private var spokenPunctuationRow: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
-            Text("4")
+            Text("5")
                 .font(DesignSystem.Typography.caption.weight(.semibold))
                 .foregroundStyle(DesignSystem.Colors.accent)
                 .frame(width: 24, height: 24)
@@ -336,7 +336,7 @@ struct VocabularyView: View {
             Spacer()
 
             Toggle("Spoken punctuation", isOn: $settingsViewModel.spokenPunctuationEnabled)
-                .toggleStyle(.switch)
+                .parakeetSwitch()
                 .labelsHidden()
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)

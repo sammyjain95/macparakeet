@@ -130,6 +130,8 @@ struct MainWindowView: View {
                             isSelected: state.selectedItem == .discover,
                             onTap: { state.selectedItem = .discover }
                         )
+                        // Keep the pinned card clear of the window edge.
+                        .padding(.bottom, DesignSystem.Spacing.sm)
                     }
                 }
                 .navigationSplitViewColumnWidth(min: 170, ideal: DesignSystem.Layout.sidebarMinWidth, max: 240)
@@ -348,6 +350,10 @@ struct MainWindowView: View {
                     }
                 }
             }
+            // Sidebar row selection follows the accent color, not the
+            // List tint alone: apply it at the split-view level so the
+            // selected row renders in the brand coral.
+            .accentColor(DesignSystem.Colors.accent)
 
             if showGlobalProgressBar {
                 globalTranscriptionBottomBar
