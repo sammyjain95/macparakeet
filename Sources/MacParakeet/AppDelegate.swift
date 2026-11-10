@@ -68,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `TransformExecutor` pipeline. Gated on `AppFeatures.transformsEnabled`.
     private var transformsCoordinator: TransformsCoordinator?
     private var voiceControlCoordinator: VoiceControlCoordinator?
+    /// Command Mode coordinator (TRD 2026-11-09): voice-driven transforms on
+    /// selected text. Gated on `AppFeatures.isCommandModeAvailable()`.
+    private var commandModeCoordinator: CommandModeCoordinator?
+    private var commandModeHotkeyManager: GlobalShortcutManager?
+    private var commandModeHotkeyObserver: NSObjectProtocol?
     private var hasPresentedHotkeyUnavailableAlert = false
     private var hasPresentedHotkeyConflictAlert = false
     private var environmentSetupTask: Task<Void, Never>?
@@ -467,6 +472,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         meetingActivityDetectionCoordinator?.stop()
         transformsCoordinator?.stop()
         voiceControlCoordinator?.shutdown()
+        commandModeHotkeyManager?.stop()
+        commandModeHotkeyManager = nil
+        if let commandModeHotkeyObserver {
+            NotificationCenter.default.removeObserver(commandModeHotkeyObserver)
+            self.commandModeHotkeyObserver = nil
+        }
+        commandModeCoordinator = nil
         settingsObserverCoordinator.stopObserving()
         environmentSetupTask?.cancel()
         speechPreWarmTask?.cancel()
@@ -796,6 +808,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         self.settingsViewModel.meetingHotkeyTrigger,
                         self.settingsViewModel.fileTranscriptionHotkeyTrigger,
                         self.settingsViewModel.youtubeTranscriptionHotkeyTrigger,
+                        self.settingsViewModel.commandModeHotkeyTrigger,
                     ]
                         + transforms.compactMap { $0.shortcut?.hotkeyTrigger }
                 }
@@ -805,6 +818,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menuBarCoordinator.onInteractionBusy = { [weak control] in control?.explainInteractionBusy() }
             dictationFlowCoordinator?.onInteractionBusy = { [weak control] in control?.explainInteractionBusy() }
             control.installHotkey()
+        }
+
+        // Command Mode (TRD 2026-11-09): dedicated hotkey for voice-driven transforms
+        // on selected text. Local-only, fail-closed; command transcript is never pasted.
+        if AppFeatures.isCommandModeAvailable() {
+            let commandCoordinator = CommandModeCoordinator(
+                audioProcessor: env.audioProcessor,
+                sttTranscriber: env.sttScheduler,
+                routingLLMClient: env.llmClient,
+                preferences: env.runtimePreferences,
+                isBusyForDictation: { [weak self] in
+                    self?.dictationFlowCoordinator?.isCapturingAudio == true
+                }
+            )
+            commandModeCoordinator = commandCoordinator
+            setupCommandModeHotkey()
+            if commandModeHotkeyObserver == nil {
+                commandModeHotkeyObserver = NotificationCenter.default.addObserver(
+                    forName: .macParakeetCommandModeHotkeyTriggerDidChange,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.setupCommandModeHotkey()
+                    }
+                }
+            }
         }
 
         menuBarCoordinator.refreshHotkeyTitle()
@@ -984,8 +1024,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voiceControlCoordinator?.installHotkey()
     }
 
+    private func setupCommandModeHotkey() {
+        commandModeHotkeyManager?.stop()
+        commandModeHotkeyManager = nil
+
+        guard AppFeatures.isCommandModeAvailable() else { return }
+        guard !isHotkeyRecorderActive else { return }
+        guard let coordinator = commandModeCoordinator else { return }
+
+        let trigger = settingsViewModel.commandModeHotkeyTrigger
+        guard !trigger.isDisabled else { return }
+
+        let manager = GlobalShortcutManager(trigger: trigger)
+        manager.onTrigger = { [weak coordinator] in
+            Task { @MainActor in
+                coordinator?.toggle()
+            }
+        }
+        if manager.start() {
+            commandModeHotkeyManager = manager
+        }
+    }
+
     private func transformReservedHotkeysForTransforms() -> [TransformShortcutReservedHotkey] {
         var reserved: [TransformShortcutReservedHotkey] = [
+            TransformShortcutReservedHotkey(
+                name: "command mode",
+                trigger: settingsViewModel.commandModeHotkeyTrigger,
+                conflictMode: .bareModifierDictation
+            ),
             TransformShortcutReservedHotkey(
                 name: "hands-free dictation",
                 trigger: settingsViewModel.hotkeyTrigger,
@@ -1105,6 +1172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeyCoordinator?.suspend()
             transformsCoordinator?.suspendHotkeys()
             voiceControlCoordinator?.suspendHotkey()
+            commandModeHotkeyManager?.stop()
+            commandModeHotkeyManager = nil
         } else {
             guard activeHotkeyRecorderSessions > 0 else { return }
             activeHotkeyRecorderSessions -= 1
@@ -1112,6 +1181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeyCoordinator?.resume()
             transformsCoordinator?.resumeHotkeys()
             voiceControlCoordinator?.installHotkey()
+            setupCommandModeHotkey()
             onboardingHotkeyPreviewController.setCapturePaused(false)
         }
     }

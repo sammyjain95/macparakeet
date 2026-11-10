@@ -132,6 +132,26 @@ public enum AppFeatures {
     /// the engine is batch-only (no live partials/word timestamps).
     public static let cohereEngineEnabled: Bool = true
 
+    /// Command Mode — voice-driven transforms on selected text (TRD 2026-11-09).
+    /// A dedicated hotkey captures the current selection, listens for a spoken
+    /// instruction, and replaces the selection with the result. Distinct from
+    /// Dictation: never infers mode from content, never pastes the command
+    /// transcript, and enforces local-only LLM routing (fail-closed). When
+    /// `false`, the hotkey is not registered and no UI is shown. Data model
+    /// plumbing remains intact so flipping this flag is a no-data operation.
+    public static let commandModeEnabled: Bool = false
+    public static let commandModeDeveloperLaunchArgument = "--enable-command-mode"
+
+    public static func isCommandModeAvailable(
+        arguments: [String] = ProcessInfo.processInfo.arguments
+    ) -> Bool {
+        #if DEBUG
+        commandModeEnabled || arguments.contains(commandModeDeveloperLaunchArgument)
+        #else
+        commandModeEnabled
+        #endif
+    }
+
     /// VAD-guided meeting live chunking
     /// (`plans/completed/2026-05-meeting-vad-guided-live-chunking.md`). When
     /// `false`, meeting live-preview chunks use the fixed 5s / 1s-overlap

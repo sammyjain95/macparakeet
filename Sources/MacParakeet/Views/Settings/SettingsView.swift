@@ -1117,6 +1117,18 @@ struct SettingsView: View {
                         : ("Set up AI", { openRequestedSettingsDestination(tab: .ai, anchor: "ai.provider") })
                 )
 
+                Divider()
+
+                transcriptionHotkeyRow(
+                    title: "Command Mode",
+                    detail: AppFeatures.isCommandModeAvailable()
+                        ? "Select text and press this shortcut to speak a command to rewrite or transform it. Runs locally."
+                        : "Select text and speak a command to rewrite or transform it. Runs locally. (Enable with --enable-command-mode in debug.)",
+                    surface: .commandMode,
+                    trigger: $viewModel.commandModeHotkeyTrigger
+                )
+                .disabled(!AppFeatures.isCommandModeAvailable())
+
                 if !viewModel.hotkeyTrigger.isDisabled
                     || !viewModel.pushToTalkHotkeyTrigger.isDisabled
                     || !viewModel.dictationAIPolishHotkeyTrigger.isDisabled
@@ -1757,6 +1769,7 @@ struct SettingsView: View {
             dictationAIPolish: viewModel.dictationAIPolishHotkeyTrigger,
             alternateHandsFree: viewModel.alternateHandsFreeHotkeyTrigger,
             alternatePushToTalk: viewModel.alternatePushToTalkHotkeyTrigger,
+            commandMode: viewModel.commandModeHotkeyTrigger,
             transformHotkeys: transformHotkeys,
             meetingRecordingEnabled: AppFeatures.meetingRecordingEnabled
         )

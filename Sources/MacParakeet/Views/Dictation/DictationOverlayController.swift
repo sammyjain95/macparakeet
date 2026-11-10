@@ -53,6 +53,13 @@ protocol DictationOverlayControlling: AnyObject {
     func hide()
     func resignKeyWindow()
     func reposition()
+    func configureForCommandMode(selectedPreview: String)
+    func resetSessionKind()
+}
+
+extension DictationOverlayControlling {
+    func configureForCommandMode(selectedPreview: String) {}
+    func resetSessionKind() {}
 }
 
 extension DictationOverlayControlling {
@@ -153,6 +160,22 @@ final class DictationOverlayController: DictationOverlayControlling {
         let placement = DictationOverlayPlacement.current()
         overlayViewModel.anchorsToTop = placement.anchorsToTop
         panel.moveToDictationOverlayPosition(placement: placement)
+    }
+
+    func configureForCommandMode(selectedPreview: String) {
+        overlayViewModel.sessionKind = .command
+        overlayViewModel.commandSelectedText = selectedPreview
+        overlayViewModel.commandPromptText = "Speak your command..."
+        overlayViewModel.liveTranscript = ""
+        overlayViewModel.processingLoadCaption = nil
+        overlayViewModel.processingMessage = nil
+    }
+
+    func resetSessionKind() {
+        overlayViewModel.sessionKind = .dictation
+        overlayViewModel.commandSelectedText = ""
+        overlayViewModel.commandPromptText = "Speak your command..."
+        overlayViewModel.processingLoadCaption = nil
     }
 
     /// Resign key window so CGEvent paste targets the user's app, not the overlay panel.

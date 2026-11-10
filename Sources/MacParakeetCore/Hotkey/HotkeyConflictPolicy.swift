@@ -70,6 +70,7 @@ public enum HotkeyConflictPolicy {
         case fileTranscription
         case youtubeTranscription
         case dictationAIPolish
+        case commandMode
     }
 
     public struct Candidate: Equatable, Sendable {
@@ -120,6 +121,7 @@ public enum HotkeyConflictPolicy {
         public let fileTranscription: HotkeyTrigger
         public let youtubeTranscription: HotkeyTrigger
         public let dictationAIPolish: HotkeyTrigger
+        public let commandMode: HotkeyTrigger
         public let transformHotkeys: [Prompt]
         public let meetingRecordingEnabled: Bool
 
@@ -132,6 +134,7 @@ public enum HotkeyConflictPolicy {
             dictationAIPolish: HotkeyTrigger = .disabled,
             alternateHandsFree: HotkeyTrigger = .disabled,
             alternatePushToTalk: HotkeyTrigger = .disabled,
+            commandMode: HotkeyTrigger = .disabled,
             transformHotkeys: [Prompt],
             meetingRecordingEnabled: Bool
         ) {
@@ -143,6 +146,7 @@ public enum HotkeyConflictPolicy {
             self.fileTranscription = fileTranscription
             self.youtubeTranscription = youtubeTranscription
             self.dictationAIPolish = dictationAIPolish
+            self.commandMode = commandMode
             self.transformHotkeys = transformHotkeys
             self.meetingRecordingEnabled = meetingRecordingEnabled
         }
@@ -216,6 +220,7 @@ public enum HotkeyConflictPolicy {
                 NamedCandidate(name: "hands-free mode", trigger: snapshot.handsFree),
                 NamedCandidate(name: "push to talk", trigger: snapshot.pushToTalk),
                 NamedCandidate(name: "AI-polished dictation", trigger: snapshot.dictationAIPolish),
+                NamedCandidate(name: "Command Mode", trigger: snapshot.commandMode),
             ] {
                 if let conflict = acrossPairsConflict(candidate: trigger, peer: peer.trigger, peerName: peer.name) {
                     return conflict
@@ -226,6 +231,7 @@ public enum HotkeyConflictPolicy {
                 handsFree: snapshot.alternateHandsFree, pushToTalk: snapshot.alternatePushToTalk,
                 meeting: snapshot.meeting, fileTranscription: snapshot.fileTranscription,
                 youtubeTranscription: snapshot.youtubeTranscription, dictationAIPolish: snapshot.dictationAIPolish,
+                commandMode: snapshot.commandMode,
                 transformHotkeys: snapshot.transformHotkeys, meetingRecordingEnabled: snapshot.meetingRecordingEnabled
             )
             guard
@@ -305,6 +311,7 @@ public enum HotkeyConflictPolicy {
                         trigger: snapshot.dictationAIPolish,
                         mode: .bareModifierDictation
                     ),
+                    NamedCandidate(name: "Command Mode", trigger: snapshot.commandMode),
                 ] + transformCandidates(snapshot.transformHotkeys)
             )
 
@@ -343,10 +350,33 @@ public enum HotkeyConflictPolicy {
             ) {
                 return conflict
             }
+            if let conflict = overlappingConflict(
+                candidate: trigger,
+                peer: snapshot.commandMode,
+                peerName: "Command Mode"
+            ) {
+                return conflict
+            }
             return firstConflict(
                 for: trigger,
                 selfMode: .bareModifierDictation,
                 among: dictationPeerCandidates(snapshot: snapshot)
+            )
+
+        case .commandMode:
+            return firstConflict(
+                for: trigger,
+                among: [
+                    NamedCandidate(name: "hands-free mode", trigger: snapshot.handsFree, mode: .bareModifierDictation),
+                    NamedCandidate(name: "push to talk", trigger: snapshot.pushToTalk, mode: .bareModifierDictation),
+                    NamedCandidate(name: "additional hands-free shortcut", trigger: snapshot.alternateHandsFree, mode: .bareModifierDictation),
+                    NamedCandidate(name: "additional push-to-talk shortcut", trigger: snapshot.alternatePushToTalk, mode: .bareModifierDictation),
+                    NamedCandidate(
+                        name: "AI-polished dictation",
+                        trigger: snapshot.dictationAIPolish,
+                        mode: .bareModifierDictation
+                    ),
+                ] + dictationPeerCandidates(snapshot: snapshot)
             )
         }
     }
@@ -429,6 +459,8 @@ public enum HotkeyConflictPolicy {
             return !conflict.name.hasPrefix("additional ")
         case .alternateHandsFree:
             return conflict.name != "additional push-to-talk shortcut"
+        case .commandMode:
+            return true
         default:
             return true
         }
@@ -441,6 +473,7 @@ public enum HotkeyConflictPolicy {
         }
         candidates.append(NamedCandidate(name: "file transcription", trigger: snapshot.fileTranscription))
         candidates.append(NamedCandidate(name: "video URL transcription", trigger: snapshot.youtubeTranscription))
+        candidates.append(NamedCandidate(name: "Command Mode", trigger: snapshot.commandMode))
         candidates.append(contentsOf: transformCandidates(snapshot.transformHotkeys))
         return candidates
     }
@@ -465,6 +498,7 @@ public enum HotkeyConflictPolicy {
                 mode: .bareModifierDictation
             )
         )
+        candidates.append(NamedCandidate(name: "Command Mode", trigger: snapshot.commandMode))
         candidates.append(contentsOf: transformCandidates(snapshot.transformHotkeys))
         return candidates
     }

@@ -249,6 +249,15 @@ public final class SettingsViewModel {
             Telemetry.send(dictationAIPolishHotkeyTrigger.customizedEvent(surface: .dictationAIPolish))
         }
     }
+    public var commandModeHotkeyTrigger: HotkeyTrigger {
+        didSet {
+            commandModeHotkeyTrigger.save(to: defaults, defaultsKey: HotkeyTrigger.commandModeDefaultsKey)
+            NotificationCenter.default.post(
+                name: .macParakeetCommandModeHotkeyTriggerDidChange,
+                object: nil
+            )
+        }
+    }
     public var silenceAutoStop: Bool {
         didSet {
             defaults.set(silenceAutoStop, forKey: UserDefaultsAppRuntimePreferences.silenceAutoStopKey)
@@ -1118,6 +1127,11 @@ public final class SettingsViewModel {
         dictationAIPolishHotkeyTrigger = Self.resolveTranscriptionHotkeyTrigger(
             defaults: defaults,
             defaultsKey: HotkeyTrigger.dictationAIPolishDefaultsKey
+        )
+        commandModeHotkeyTrigger = HotkeyTrigger.current(
+            defaults: defaults,
+            defaultsKey: HotkeyTrigger.commandModeDefaultsKey,
+            fallback: .defaultCommandMode
         )
         silenceAutoStop = defaults.bool(forKey: UserDefaultsAppRuntimePreferences.silenceAutoStopKey)
         let delay = defaults.double(forKey: UserDefaultsAppRuntimePreferences.silenceDelayKey)

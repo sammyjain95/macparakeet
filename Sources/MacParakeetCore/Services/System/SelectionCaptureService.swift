@@ -286,7 +286,7 @@ public actor SelectionCaptureService {
     /// The guard preserves user clipboard writes made while the LLM was running:
     /// we only restore if the pasteboard is still at the Cmd+C change count
     /// created by `clipboardHijack()`.
-    func restoreClipboardCaptureIfCurrent(_ result: SelectionCaptureResult) async {
+    public func restoreClipboardCaptureIfCurrent(_ result: SelectionCaptureResult) async {
         guard case .clipboard(_, let snapshot, _) = result else { return }
 
         guard let temporaryChangeCount = snapshot.temporaryChangeCount else {

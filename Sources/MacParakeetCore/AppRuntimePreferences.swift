@@ -48,6 +48,39 @@ public protocol AppRuntimePreferencesProtocol: Sendable {
     /// subsequent call.
     @discardableResult
     func markFirstDictationCompleted() -> Bool
+
+    // MARK: - Command Mode
+    var commandModePreviewBehavior: CommandModePreviewBehavior { get }
+    var commandModeHistoryEnabled: Bool { get }
+    var commandModeExcludedBundleIDs: Set<String> { get }
+}
+
+public enum CommandModePreviewBehavior: String, CaseIterable, Hashable, Sendable, Equatable {
+    case alwaysPreview
+    case autoApplyDeterministicOnly
+    case autoApplyAll
+
+    public var displayTitle: String {
+        switch self {
+        case .alwaysPreview: return "Always preview"
+        case .autoApplyDeterministicOnly: return "Auto-apply deterministic only"
+        case .autoApplyAll: return "Auto-apply all"
+        }
+    }
+
+    public static func current(defaults: UserDefaults = .standard) -> CommandModePreviewBehavior {
+        guard let raw = defaults.string(forKey: UserDefaultsAppRuntimePreferences.commandModePreviewBehaviorKey),
+              let value = CommandModePreviewBehavior(rawValue: raw) else {
+            return .autoApplyDeterministicOnly
+        }
+        return value
+    }
+}
+
+public extension AppRuntimePreferencesProtocol {
+    var commandModePreviewBehavior: CommandModePreviewBehavior { .autoApplyDeterministicOnly }
+    var commandModeHistoryEnabled: Bool { false }
+    var commandModeExcludedBundleIDs: Set<String> { [] }
 }
 
 public enum MeetingAudioRetentionMode: String, CaseIterable, Identifiable, Hashable, Sendable, Equatable {
@@ -602,6 +635,11 @@ public final class UserDefaultsAppRuntimePreferences: AppRuntimePreferencesProto
     /// visible Transforms (issue #821 default).
     public static let hiddenMenuBarTransformIDsKey = "hiddenMenuBarTransformIDs"
 
+    // MARK: - Command Mode
+    public static let commandModePreviewBehaviorKey = "commandMode.previewBehavior"
+    public static let commandModeHistoryEnabledKey = "commandMode.historyEnabled"
+    public static let commandModeExcludedBundleIDsKey = "commandMode.excludedBundleIDs"
+
     private let defaults: UserDefaults
 
     public init(defaults: UserDefaults = .standard) {
@@ -935,6 +973,18 @@ public final class UserDefaultsAppRuntimePreferences: AppRuntimePreferencesProto
         guard !hasCompletedFirstDictation else { return false }
         defaults.set(true, forKey: Self.hasCompletedFirstDictationKey)
         return true
+    }
+
+    public var commandModePreviewBehavior: CommandModePreviewBehavior {
+        CommandModePreviewBehavior.current(defaults: defaults)
+    }
+
+    public var commandModeHistoryEnabled: Bool {
+        defaults.object(forKey: Self.commandModeHistoryEnabledKey) as? Bool ?? false
+    }
+
+    public var commandModeExcludedBundleIDs: Set<String> {
+        Set(defaults.stringArray(forKey: Self.commandModeExcludedBundleIDsKey) ?? [])
     }
 
     public static func meetingAudioRetention(

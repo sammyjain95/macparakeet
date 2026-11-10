@@ -387,6 +387,9 @@ public struct HotkeyTrigger: Sendable {
     public static let defaultDictation: HotkeyTrigger = .fn
     public static let defaultPushToTalk: HotkeyTrigger = .fn
     public static let defaultMeetingRecording: HotkeyTrigger = .chord(modifiers: ["command", "shift"], keyCode: 46)
+    /// Command Mode default: Control+Option modifier chord. Distinct from
+    /// dictation (Fn) and meeting (Cmd+Shift+M). Configurable in Settings.
+    public static let defaultCommandMode: HotkeyTrigger = .modifierChord(modifiers: ["control", "option"])
 
     public static func isDefaultDictationGesturePreset(
         handsFree: HotkeyTrigger,
@@ -709,6 +712,7 @@ public struct HotkeyTrigger: Sendable {
     public static let fileTranscriptionDefaultsKey = "fileTranscriptionHotkeyTrigger"
     public static let youtubeTranscriptionDefaultsKey = "youtubeTranscriptionHotkeyTrigger"
     public static let dictationAIPolishDefaultsKey = "dictationAIPolishHotkeyTrigger"
+    public static let commandModeDefaultsKey = "commandModeHotkeyTrigger"
 
     /// Legacy modifier names from the old TriggerKey enum.
     private static let legacyModifiers: [String: HotkeyTrigger] = [

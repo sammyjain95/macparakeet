@@ -678,6 +678,15 @@ struct DictationOverlayView: View {
 
     private var commandRecordingContent: some View {
         VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("Command")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.accent)
+                Text("Local only, no network")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+
             Text(viewModel.commandPromptText)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
@@ -756,12 +765,23 @@ struct DictationOverlayView: View {
 
     private var processingContent: some View {
         if viewModel.sessionKind == .command {
+            let message = viewModel.visibleProcessingMessage ?? "Applying command..."
             return AnyView(
-                HStack(spacing: 8) {
-                    SpinnerRingView()
-                    Text("Applying command...")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text("Command")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(DesignSystem.Colors.accent)
+                        Text("Local only, no network")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    HStack(spacing: 8) {
+                        SpinnerRingView()
+                        Text(message)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
                 }
             )
         }

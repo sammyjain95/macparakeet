@@ -26,6 +26,23 @@ public final class RoutingLLMClient: LLMClientProtocol, Sendable {
         inProcessClient.supportsInProcessLocalLLM
     }
 
+    /// Exposes the in-process local client for Command Mode's fail-closed
+    /// local-only path. Returns nil-like behavior via `supportsInProcessLocalLLM`
+    /// check on the caller side.
+    public var inProcessLocalClient: any LLMClientProtocol {
+        inProcessClient
+    }
+
+    /// Creates an execution context for Command Mode that targets the local
+    /// in-process MLX provider only. Returns nil if in-process local LLM is
+    /// not supported by the current build/runtime.
+    public func makeCommandModeLocalContext(
+        modelName: String = LLMProviderID.inProcessLocal.defaultModelName
+    ) -> LLMExecutionContext? {
+        guard inProcessClient.supportsInProcessLocalLLM else { return nil }
+        return LLMExecutionContext(providerConfig: .inProcessLocal(model: modelName))
+    }
+
     public func structuredOutputCapability(
         context: LLMExecutionContext
     ) -> LLMStructuredOutputCapability {

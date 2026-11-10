@@ -561,6 +561,7 @@ struct OnboardingShortcutEditor: View {
             dictationAIPolish: settingsViewModel.dictationAIPolishHotkeyTrigger,
             alternateHandsFree: settingsViewModel.alternateHandsFreeHotkeyTrigger,
             alternatePushToTalk: settingsViewModel.alternatePushToTalkHotkeyTrigger,
+            commandMode: settingsViewModel.commandModeHotkeyTrigger,
             transformHotkeys: transformsViewModel?.transforms ?? [],
             meetingRecordingEnabled: AppFeatures.meetingRecordingEnabled
         )
@@ -578,6 +579,7 @@ struct OnboardingShortcutEditor: View {
             dictationAIPolish: current.dictationAIPolish,
             alternateHandsFree: current.alternateHandsFree,
             alternatePushToTalk: current.alternatePushToTalk,
+            commandMode: current.commandMode,
             transformHotkeys: current.transformHotkeys,
             meetingRecordingEnabled: current.meetingRecordingEnabled
         )
