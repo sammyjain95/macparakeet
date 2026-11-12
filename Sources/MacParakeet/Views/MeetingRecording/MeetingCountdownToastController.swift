@@ -28,7 +28,7 @@ private final class CountdownPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Owns the floating toast panel + the 60Hz progress timer that drives the
+/// Owns the floating toast panel + the progress loop that drives the
 /// view model. Single concurrent toast — calling `show*` while one is
 /// already visible closes the previous one with `.programmaticClose` so
 /// stacked countdowns don't compete for screen real estate.
@@ -37,11 +37,10 @@ final class MeetingCountdownToastController {
     private var panel: NSPanel?
     private var viewModel: MeetingCountdownToastViewModel?
     private var startTime: Date?
-    private var timer: Timer?
-    /// In-flight tick Task. Tracked so `finish()` can cancel it before
-    /// nilling out `viewModel` / `startTime` — otherwise a Task scheduled
-    /// from the last timer tick can fire `tick()` against torn-down state
-    /// and fall through to the early `return` (silent, but a smell).
+    /// The single progress-loop Task. Tracked so `finish()` can cancel it
+    /// before nilling out `viewModel` / `startTime` — otherwise a tick can
+    /// fire against torn-down state and fall through to the early `return`
+    /// (silent, but a smell).
     private var tickTask: Task<Void, Never>?
     private var onOutcome: ((MeetingCountdownToastOutcome) -> Void)?
 
@@ -150,19 +149,19 @@ final class MeetingCountdownToastController {
     }
 
     private func startTimer() {
-        timer?.invalidate()
-        // 60Hz refresh keeps the progress bar smooth without burning CPU —
-        // a 5s auto-start ticks 300 times total. Add to .common so the
-        // timer keeps firing during menu/scroll tracking. Track the spawned
-        // Task so `finish()` can cancel it before nilling state.
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.tickTask?.cancel()
-                self?.tickTask = Task { @MainActor [weak self] in self?.tick() }
+        tickTask?.cancel()
+        // One long-lived Task drives the progress bar at 30Hz instead of a
+        // Timer spawning a Task per tick (~60 spawns/second for a 5s toast
+        // before). Progress is derived from wall-clock elapsed time, so the
+        // lower rate changes nothing about countdown timing; 30Hz is still
+        // smooth for a bar. Track the Task so `finish()` can cancel it
+        // before nilling state.
+        tickTask = Task { @MainActor [weak self] in
+            while let self, !Task.isCancelled {
+                self.tick()
+                try? await Task.sleep(nanoseconds: 1_000_000_000 / 30)
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
     }
 
     private func tick() {
@@ -194,9 +193,7 @@ final class MeetingCountdownToastController {
 
     private func finish(_ outcome: MeetingCountdownToastOutcome) {
         let callback = onOutcome
-        timer?.invalidate()
         tickTask?.cancel()
-        timer = nil
         tickTask = nil
         panel?.orderOut(nil)
         panel = nil

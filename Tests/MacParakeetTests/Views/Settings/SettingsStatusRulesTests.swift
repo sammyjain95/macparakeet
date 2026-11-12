@@ -175,6 +175,7 @@ final class SettingsStatusRulesTests: XCTestCase {
             meetingRecordingEnabled: true,
             microphoneGranted: false,
             accessibilityGranted: true,
+            inputMonitoringGranted: true,
             screenRecordingGranted: true,
             meetingAudioSourceMode: .microphoneAndSystem
         )
@@ -187,6 +188,7 @@ final class SettingsStatusRulesTests: XCTestCase {
             meetingRecordingEnabled: true,
             microphoneGranted: true,
             accessibilityGranted: true,
+            inputMonitoringGranted: true,
             screenRecordingGranted: false,
             meetingAudioSourceMode: .microphoneAndSystem
         )
@@ -199,10 +201,24 @@ final class SettingsStatusRulesTests: XCTestCase {
             meetingRecordingEnabled: true,
             microphoneGranted: true,
             accessibilityGranted: true,
+            inputMonitoringGranted: true,
             screenRecordingGranted: false,
             meetingAudioSourceMode: .microphoneOnly
         )
 
         XCTAssertEqual(status, SettingsCardStatus(.ok, label: "Ready"))
+    }
+
+    func testPermissionsRequiresActionWhenInputMonitoringMissing() {
+        let status = SettingsStatusRules.permissionsCardStatus(
+            meetingRecordingEnabled: true,
+            microphoneGranted: true,
+            accessibilityGranted: true,
+            inputMonitoringGranted: false,
+            screenRecordingGranted: true,
+            meetingAudioSourceMode: .microphoneAndSystem
+        )
+
+        XCTAssertEqual(status, SettingsCardStatus(.required, label: "Action required"))
     }
 }

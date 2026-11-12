@@ -28,7 +28,7 @@ struct StopRecordingButton: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(DesignSystem.Colors.errorRed)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
                                 .fill(DesignSystem.Colors.surfaceElevated)

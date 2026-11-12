@@ -61,6 +61,9 @@ public enum SelectionCaptureError: Error, LocalizedError, Sendable {
     case targetNotFrontmost
     case eventSourceUnavailable
     case eventPostingFailed
+    /// The focused element is a password/secure field. Capture refuses
+    /// before reading any text (C3).
+    case secureField
 
     public var errorDescription: String? {
         switch self {
@@ -72,6 +75,8 @@ public enum SelectionCaptureError: Error, LocalizedError, Sendable {
             return "Could not create a CGEventSource for the clipboard-fallback path."
         case .eventPostingFailed:
             return "Failed to post Cmd+C during clipboard-fallback selection capture."
+        case .secureField:
+            return "Command Mode can't read text from a password field."
         }
     }
 }
@@ -143,6 +148,11 @@ protocol SelectionCaptureBackend: Sendable {
     func focusedElement(ofProcess pid: pid_t) -> AXUIElement?
     func selectedText(of element: AXUIElement) -> String?
 
+    /// Resolve the AX field kind of a focused element (C3). The default
+    /// is `.unknown`; the system backend resolves the AX role so secure
+    /// fields can be refused before any text is read.
+    func fieldKind(of element: AXUIElement) -> CommandModeFieldKind
+
     @MainActor
     func frontmostApplicationTarget() -> SelectionCaptureTarget?
 
@@ -169,6 +179,12 @@ protocol SelectionCaptureBackend: Sendable {
     /// clipboard is silently destroyed.
     @MainActor
     func restoreSnapshot(_ snapshot: PasteboardSnapshot)
+}
+
+extension SelectionCaptureBackend {
+    /// Default: field kind unknown (test fakes keep compiling; only the
+    /// system backend resolves the AX role).
+    func fieldKind(of element: AXUIElement) -> CommandModeFieldKind { .unknown }
 }
 
 // MARK: - Service
@@ -210,6 +226,13 @@ public actor SelectionCaptureService {
         self.logger = logger
     }
 
+    /// Resolve the AX field kind of a captured element (C3). Used by the
+    /// coordinator to pick prompt guidance; secure fields are refused
+    /// during capture, before any text is read.
+    public func fieldKind(of element: AXFocusedElement) -> CommandModeFieldKind {
+        backend.fieldKind(of: element.element)
+    }
+
     /// Try to capture the user's current selection. Never throws — returns a
     /// `.failed` case for hard errors. Callers should treat `.empty` as the
     /// "no selection" UX path (toast: select text first).
@@ -222,6 +245,12 @@ public actor SelectionCaptureService {
         let target = await captureTargetOnMain()
 
         if let element = backend.focusedElement() {
+            // C3: refuse secure fields before reading any text — and
+            // before the clipboard fallback, which would Cmd+C the field.
+            guard backend.fieldKind(of: element) != .secureField else {
+                logger.notice("selection capture refused: focused element is a secure field")
+                return .failed(.secureField)
+            }
             if let text = backend.selectedText(of: element),
                !text.isEmpty {
                 return .ax(text: text, element: AXFocusedElement(element), target: target)
@@ -243,14 +272,20 @@ public actor SelectionCaptureService {
         guard await targetIsFrontmostOnMain(target) else {
             return .failed(.targetNotFrontmost)
         }
-        if let element = backend.focusedElement(ofProcess: target.processIdentifier),
-            let text = backend.selectedText(of: element),
-            !text.isEmpty
-        {
-            guard await targetIsFrontmostOnMain(target) else {
-                return .failed(.targetNotFrontmost)
+        if let element = backend.focusedElement(ofProcess: target.processIdentifier) {
+            // C3: refuse secure fields before reading any text.
+            guard backend.fieldKind(of: element) != .secureField else {
+                logger.notice("selection capture refused: focused element is a secure field")
+                return .failed(.secureField)
             }
-            return .ax(text: text, element: AXFocusedElement(element), target: target)
+            if let text = backend.selectedText(of: element),
+               !text.isEmpty
+            {
+                guard await targetIsFrontmostOnMain(target) else {
+                    return .failed(.targetNotFrontmost)
+                }
+                return .ax(text: text, element: AXFocusedElement(element), target: target)
+            }
         }
         return await clipboardHijack(target: target, requireFrontmostTarget: target)
     }
@@ -272,11 +307,18 @@ public actor SelectionCaptureService {
         // lookup can switch to another app while the status menu opens.
         let scopedTarget = target ?? (frontmostIsForeign ? frontmost : nil)
         if let scopedTarget,
-            let element = backend.focusedElement(ofProcess: scopedTarget.processIdentifier),
-            let text = backend.selectedText(of: element),
-            !text.isEmpty
+            let element = backend.focusedElement(ofProcess: scopedTarget.processIdentifier)
         {
-            return .ax(text: text, element: AXFocusedElement(element), target: scopedTarget)
+            // C3: refuse secure fields before reading any text.
+            guard backend.fieldKind(of: element) != .secureField else {
+                logger.notice("selection capture refused: focused element is a secure field")
+                return .failed(.secureField)
+            }
+            if let text = backend.selectedText(of: element),
+               !text.isEmpty
+            {
+                return .ax(text: text, element: AXFocusedElement(element), target: scopedTarget)
+            }
         }
 
         return .empty
@@ -452,6 +494,26 @@ struct SystemSelectionCaptureBackend: SelectionCaptureBackend, @unchecked Sendab
         guard status == .success, let raw else { return nil }
         let value = raw as? String
         return value?.isEmpty == true ? nil : value
+    }
+
+    /// Resolve the AX field kind of a focused element (C3). Only the
+    /// secure-field role changes handling; every other role is `.unknown`
+    /// because AX roles cannot tell a code editor's text area from a
+    /// notes app's (the coordinator maps those from the app category).
+    func fieldKind(of element: AXUIElement) -> CommandModeFieldKind {
+        var raw: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(
+            element,
+            kAXRoleAttribute as CFString,
+            &raw
+        )
+        guard status == .success, let role = raw as? String else {
+            return .unknown
+        }
+        if role == (kAXSecureTextFieldRole as String) {
+            return .secureField
+        }
+        return .unknown
     }
 
     @MainActor

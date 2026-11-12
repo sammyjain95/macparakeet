@@ -2,6 +2,9 @@ import AppKit
 import Sparkle
 import MacParakeetCore
 import MacParakeetViewModels
+import ApplicationServices
+import CoreGraphics
+import OSLog
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -73,8 +76,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var commandModeCoordinator: CommandModeCoordinator?
     private var commandModeHotkeyManager: GlobalShortcutManager?
     private var commandModeHotkeyObserver: NSObjectProtocol?
+    /// Last reason the Command Mode hotkey could not start, if any.
+    /// Cleared on a successful start. Settings diagnostics reads this
+    /// (A1); the wiring for the row itself is follow-up.
+    var commandModeHotkeyUnavailableReason: String?
+    /// True once any hotkey manager has failed to start since the last
+    /// all-clear (A3: the unavailable alert must fire for tap failures
+    /// even when Accessibility itself is granted).
+    private var didAnyHotkeyManagerFailToStart = false
     private var hasPresentedHotkeyUnavailableAlert = false
     private var hasPresentedHotkeyConflictAlert = false
+    private let logger = Logger(subsystem: "com.macparakeet.app", category: "AppDelegate")
     private var environmentSetupTask: Task<Void, Never>?
     private var meetingQuitTask: Task<Void, Never>?
     private let savedMeetingNotesCoordinator = SavedMeetingNotesCoordinator.shared
@@ -584,6 +596,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             meetingAudioRetentionSweepCoordinator.scheduleForegroundSweepIfDue(environment: appEnvironment)
         }
         if let sharing = shareManagementViewModel { Task { await sharing.refresh() } }
+        // A6: a Command Mode tap that failed at launch (e.g. TCC not yet
+        // granted) was otherwise never retried.
+        retryCommandModeHotkeyIfNeeded()
     }
 
     // MARK: - Startup
@@ -686,8 +701,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onHotkeyBecameAvailable: { [weak self] in
                     self?.hasPresentedHotkeyUnavailableAlert = false
                     self?.hasPresentedHotkeyConflictAlert = false
+                    self?.didAnyHotkeyManagerFailToStart = false
                 },
                 onHotkeyUnavailable: { [weak self] in
+                    self?.didAnyHotkeyManagerFailToStart = true
                     self?.presentHotkeyUnavailableAlertIfNeeded()
                 },
                 onHotkeyConflict: { [weak self] trigger, conflicts in
@@ -984,6 +1001,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyCoordinator?.refreshAllHotkeys()
         if !isHotkeyRecorderActive {
             transformsCoordinator?.resumeHotkeys()
+            // A2: Command Mode was never re-armed here, so a late grant
+            // revived dictation but left Command Mode dead until restart
+            // or a hotkey rebind.
+            setupCommandModeHotkey()
         }
     }
 
@@ -1035,15 +1056,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let trigger = settingsViewModel.commandModeHotkeyTrigger
         guard !trigger.isDisabled else { return }
 
-        let manager = GlobalShortcutManager(trigger: trigger)
+        let manager = GlobalShortcutManager(trigger: trigger, diagnosticContext: "command mode")
         manager.onTrigger = { [weak coordinator] in
             Task { @MainActor in
                 coordinator?.toggle()
             }
         }
+        // C2: Escape cancels a live command session (listening /
+        // transcribing / thinking). The event is never consumed, so
+        // dictation's own Escape handling is unaffected.
+        manager.onEscape = { [weak coordinator] in
+            Task { @MainActor in
+                guard let coordinator, coordinator.isActive else { return }
+                coordinator.cancel()
+            }
+        }
         if manager.start() {
             commandModeHotkeyManager = manager
+            commandModeHotkeyUnavailableReason = nil
+        } else {
+            // A1: the failure used to vanish silently here. Record why so
+            // Settings diagnostics (and the unavailable alert) can show it.
+            let inputMonitoringGranted = BackgroundEventTap.isInputMonitoringGranted()
+            let accessibilityTrusted = AXIsProcessTrusted()
+            commandModeHotkeyUnavailableReason =
+                "Command Mode hotkey (\(trigger.displayName)) could not start: the system event tap was refused. "
+                + "Accessibility granted: \(settingsViewModel.accessibilityGranted), "
+                + "Input Monitoring granted: \(inputMonitoringGranted)."
+            didAnyHotkeyManagerFailToStart = true
+            LastHotkeyTapFailure.shared.record(
+                HotkeyTapFailure(
+                    context: "command mode (\(trigger.displayName))",
+                    accessibilityTrusted: accessibilityTrusted
+                )
+            )
+            logger.error(
+                "command_mode_hotkey_start_failed trigger=\(trigger.displayName, privacy: .public) accessibility_trusted=\(accessibilityTrusted, privacy: .public) input_monitoring_granted=\(inputMonitoringGranted, privacy: .public)"
+            )
         }
+    }
+
+    /// A6: re-arm a Command Mode tap that failed to start, once per
+    /// activation while no manager is live. A healthy tap is never torn
+    /// down and rebuilt; each attempt is logged by `setupCommandModeHotkey`.
+    private func retryCommandModeHotkeyIfNeeded() {
+        guard commandModeHotkeyManager == nil else { return }
+        guard AppFeatures.isCommandModeAvailable(), commandModeCoordinator != nil else { return }
+        guard !isHotkeyRecorderActive else { return }
+        guard !settingsViewModel.commandModeHotkeyTrigger.isDisabled else { return }
+        logger.info("command_mode_hotkey_retry")
+        setupCommandModeHotkey()
     }
 
     private func transformReservedHotkeysForTransforms() -> [TransformShortcutReservedHotkey] {
@@ -1389,9 +1451,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func presentHotkeyUnavailableAlertIfNeeded() {
-        #if !DEBUG
         guard !hasPresentedHotkeyUnavailableAlert else { return }
-        guard settingsViewModel.accessibilityGranted == false else { return }
+        // A3: previously this only fired when Accessibility was missing, so
+        // a tap refused for another reason (e.g. Input Monitoring) showed
+        // nothing — and in DEBUG builds the alert was compiled out entirely.
+        // Fire whenever a manager failed to start or either grant is missing.
+        let inputMonitoringGranted = BackgroundEventTap.isInputMonitoringGranted()
+        guard settingsViewModel.accessibilityGranted == false
+            || !inputMonitoringGranted
+            || didAnyHotkeyManagerFailToStart else { return }
 
         hasPresentedHotkeyUnavailableAlert = true
         NSApp.activate(ignoringOtherApps: true)
@@ -1399,9 +1467,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Global Hotkey Unavailable"
-        alert.informativeText =
-            "MacParakeet couldn’t enable the system-wide hotkey because Accessibility access is missing. "
-            + "You can still open the app manually, but dictation shortcuts won’t work until this is enabled."
+        if settingsViewModel.accessibilityGranted == false {
+            alert.informativeText =
+                "MacParakeet couldn’t enable the system-wide hotkey because Accessibility access is missing. "
+                + "You can still open the app manually, but dictation shortcuts won’t work until this is enabled."
+        } else if !inputMonitoringGranted {
+            alert.informativeText =
+                "MacParakeet couldn’t enable the system-wide hotkey because Input Monitoring access is missing. "
+                + "Global hotkeys need both Accessibility and Input Monitoring. "
+                + "You can still open the app manually, but dictation shortcuts won’t work until this is enabled."
+        } else {
+            alert.informativeText =
+                "MacParakeet couldn’t enable the system-wide hotkey because the system refused the event tap. "
+                + "You can still open the app manually, but dictation shortcuts won’t work until this is enabled."
+        }
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Not Now")
 
@@ -1409,11 +1488,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if response == .alertFirstButtonReturn {
             windowCoordinator.openMainWindowToSettings()
         }
-        #endif
     }
 
     private func presentHotkeyConflictAlertIfNeeded(trigger: HotkeyTrigger, conflicts: [HotkeyTrigger]) {
-        #if !DEBUG
         guard !hasPresentedHotkeyConflictAlert else { return }
         hasPresentedHotkeyConflictAlert = true
         NSApp.activate(ignoringOtherApps: true)
@@ -1432,7 +1509,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if response == .alertFirstButtonReturn {
             windowCoordinator.openMainWindowToSettings()
         }
-        #endif
     }
 
     private func showAboutPanel() {

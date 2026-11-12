@@ -12,12 +12,6 @@ final class AppStartupBootstrapper {
             let manager = try DatabaseManager(path: AppPaths.databasePath)
             try Task.checkCancellation()
 
-            // Keep one-time launch cleanup off the main actor.
-            let dictationRepo = DictationRepository(dbQueue: manager.dbQueue)
-            _ = try? dictationRepo.deleteEmpty()
-            try? dictationRepo.clearMissingAudioPaths()
-
-            try Task.checkCancellation()
             return manager
         }
 

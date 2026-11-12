@@ -723,14 +723,11 @@ struct TranscriptionLibraryView: View {
 
                 Spacer()
 
-                Button {
-                    showingBulkExportOptions = false
-                } label: {
+                IconButton28(action: { showingBulkExportOptions = false }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel("Close export options")
             }
 
@@ -846,14 +843,11 @@ struct TranscriptionLibraryView: View {
 
                 Spacer(minLength: 4)
 
-                Button {
-                    bulkExportResult = nil
-                } label: {
+                IconButton28(action: { bulkExportResult = nil }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel("Close export confirmation")
             }
 

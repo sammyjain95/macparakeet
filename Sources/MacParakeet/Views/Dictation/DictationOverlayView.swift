@@ -666,7 +666,7 @@ struct DictationOverlayView: View {
                                 / (viewModel.cancelCountdownDuration > 0 ? viewModel.cancelCountdownDuration : 1.0)
                         )
                     )
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(DesignSystem.Colors.accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .frame(width: 24, height: 24)
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 1), value: viewModel.cancelTimeRemaining)
@@ -687,7 +687,7 @@ struct DictationOverlayView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 8)
                     .background(
                         Capsule()
                             .fill(Color.white.opacity(0.12))

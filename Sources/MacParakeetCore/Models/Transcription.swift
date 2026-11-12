@@ -260,14 +260,13 @@ extension Transcription {
 
     public var effectiveDisplayTitle: String {
         if sourceType == .meeting {
-            let name = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
-            return name.isEmpty ? fileName : name
+            return displayTitle(forFileName: fileName)
         }
         if let titleOverride = normalizedTitleOverride {
             return titleOverride
         }
         if sourceType == .file {
-            return fileName
+            return displayTitle(forFileName: fileName)
         }
         if let derived = derivedTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
            !derived.isEmpty {
@@ -275,6 +274,35 @@ extension Transcription {
         }
         return fileName
     }
+
+    /// Display title for a raw source filename: the extension is stripped,
+    /// and machine-generated names (UUIDs / bare 32-hex ids, e.g. raw
+    /// recording files) fall back to `Recording · <date>` so Library cards
+    /// never show a bare id. The raw filename is untouched elsewhere — this
+    /// only changes what the title reads as.
+    private func displayTitle(forFileName name: String) -> String {
+        let stem = (name as NSString).deletingPathExtension
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !stem.isEmpty else { return name }
+        if Self.isMachineGeneratedFileStem(stem) {
+            return "Recording · \(Self.recordingDateFormatter.string(from: createdAt))"
+        }
+        return stem
+    }
+
+    private static func isMachineGeneratedFileStem(_ stem: String) -> Bool {
+        if UUID(uuidString: stem) != nil { return true }
+        // Bare UUID without dashes: 32 hex digits.
+        let hexOnly = stem.replacingOccurrences(of: "-", with: "")
+        return hexOnly.count == 32 && hexOnly.allSatisfy(\.isHexDigit)
+    }
+
+    private static let recordingDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
 }
 
 public struct WordTimestamp: Codable, Sendable, Equatable {

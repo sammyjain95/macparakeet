@@ -176,6 +176,7 @@ public final class HotkeyManager {
         guard let tap = BackgroundEventTap.start(
             options: Self.eventTapOptions(for: trigger),
             eventsOfInterest: Self.eventMask(for: trigger, peerInput: peerInput),
+            diagnosticContext: "dictation (\(trigger.displayName))",
             handler: { type, event in relay.handle(type: type, event: event) }
         ) else {
             // Log the trust state so logs distinguish "permission not granted"
@@ -185,6 +186,16 @@ public final class HotkeyManager {
             Self.logger.error(
                 "hotkey_tap_create_failed accessibility_trusted=\(isTrusted, privacy: .public)"
             )
+            #if DEBUG
+            // A4: mirror the failure where Settings diagnostics can show
+            // it without Console.app.
+            LastHotkeyTapFailure.shared.record(
+                HotkeyTapFailure(
+                    context: "dictation (\(trigger.displayName))",
+                    accessibilityTrusted: isTrusted
+                )
+            )
+            #endif
             return false
         }
 

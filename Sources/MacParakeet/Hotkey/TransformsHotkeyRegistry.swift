@@ -142,6 +142,7 @@ public final class TransformsHotkeyRegistry {
         guard let tap = BackgroundEventTap.start(
             options: .defaultTap,
             eventsOfInterest: eventMask,
+            diagnosticContext: "transforms",
             handler: { [weak self] type, event in
                 guard let self else { return Unmanaged.passUnretained(event) }
                 return self.handleEvent(type: type, event: event)
@@ -151,6 +152,13 @@ public final class TransformsHotkeyRegistry {
             Self.logger.error(
                 "transforms_hotkey_tap_create_failed accessibility_trusted=\(isTrusted, privacy: .public)"
             )
+            #if DEBUG
+            // A4: mirror the failure where Settings diagnostics can show
+            // it without Console.app.
+            LastHotkeyTapFailure.shared.record(
+                HotkeyTapFailure(context: "transforms", accessibilityTrusted: isTrusted)
+            )
+            #endif
             return false
         }
         backgroundTap = tap

@@ -114,10 +114,16 @@ final class CommandModeCoordinator {
         }
 
         activeTask?.cancel()
-        undoTask?.cancel()
+        // C7: a second hotkey press inside the 10s undo window must not
+        // wipe the undo. Only clear the previous apply's undo state when
+        // no undo window is live; the countdown task exits on its own once
+        // the overlay state leaves `.cancelled` (see `beginUndoWindow`).
+        if lastAppliedOriginal == nil {
+            undoTask?.cancel()
+            lastAppliedOriginal = nil
+            lastAppliedSelection = nil
+        }
         cleanupTempAudio()
-        lastAppliedOriginal = nil
-        lastAppliedSelection = nil
 
         phase = .capturing
         activeTask = Task { @MainActor [weak self] in
@@ -193,6 +199,14 @@ final class CommandModeCoordinator {
         overlayViewModel.liveTranscript = ""
         overlayController.configureForCommandMode(selectedPreview: String(selectedText.prefix(120)))
         overlayController.show()
+        // C2: Cancel/Stop must abort the session. They were dead here: the
+        // callbacks were only assigned in the undo window, after apply.
+        overlayViewModel.onCancel = { [weak self] in
+            Task { @MainActor in self?.cancel() }
+        }
+        overlayViewModel.onStop = { [weak self] in
+            Task { @MainActor in self?.cancel() }
+        }
         overlayViewModel.startTimer()
 
         do {
@@ -274,10 +288,18 @@ final class CommandModeCoordinator {
         }
 
         let appCategory = capturedAppContext?.category ?? .other
+        // C3: resolve the field kind from the captured element so the
+        // executor's secure-field check and the code-editor prompt
+        // guidance can engage. Secure fields never reach here: capture
+        // refuses them before reading any text.
+        var resolvedFieldKind: CommandModeFieldKind = .unknown
+        if case .ax(_, let element, _) = selection {
+            resolvedFieldKind = await selectionCapture.fieldKind(of: element)
+        }
         let cmdContext = CommandModeAppContext(
             bundleIdentifier: capturedAppContext?.bundleIdentifier,
             category: appCategory,
-            fieldKind: fieldKind(for: appCategory),
+            fieldKind: fieldKind(for: appCategory, resolved: resolvedFieldKind),
             languageHint: nil
         )
 
@@ -430,6 +452,8 @@ final class CommandModeCoordinator {
         overlayViewModel.onCancel = { [weak self] in
             Task { @MainActor in self?.finalizeAfterApply() }
         }
+        // The applied transform must not be abortable from here.
+        overlayViewModel.onStop = nil
         overlayViewModel.state = .cancelled(timeRemaining: seconds)
         phase = .done
 
@@ -481,6 +505,7 @@ final class CommandModeCoordinator {
         lastAppliedSelection = nil
         overlayViewModel.onUndo = nil
         overlayViewModel.onCancel = nil
+        overlayViewModel.onStop = nil
         overlayViewModel.state = .success
         overlayViewModel.processingMessage = nil
         scheduleHide()
@@ -488,8 +513,22 @@ final class CommandModeCoordinator {
 
     // MARK: - Helpers
 
-    private func fieldKind(for category: TelemetryAppCategory) -> CommandModeFieldKind {
+    /// Resolve the field kind for the executor and prompt guidance.
+    /// `resolved` comes from the captured element's AX role (secure fields
+    /// are refused during capture, so `.secureField` here is defense in
+    /// depth). AX roles cannot tell a code editor's text area from a notes
+    /// app's, so `.codeEditor` comes from the app category instead.
+    /// `.browserPrompt` is intentionally not mapped: a browser selection
+    /// is usually page text, not a prompt input, and no AX role
+    /// distinguishes the two — the category's browser guidance applies.
+    private func fieldKind(
+        for category: TelemetryAppCategory,
+        resolved: CommandModeFieldKind
+    ) -> CommandModeFieldKind {
+        if resolved == .secureField { return .secureField }
         if category == .terminal { return .terminal }
+        if resolved != .unknown { return resolved }
+        if category == .code { return .codeEditor }
         return .plainText
     }
 
@@ -512,6 +551,7 @@ final class CommandModeCoordinator {
             self?.overlayController.hide()
             self?.overlayViewModel.onUndo = nil
             self?.overlayViewModel.onCancel = nil
+            self?.overlayViewModel.onStop = nil
             switch self?.phase {
             case .done, .failed, .idle, .none:
                 self?.phase = .idle
@@ -546,6 +586,7 @@ final class CommandModeCoordinator {
         lastAppliedSelection = nil
         overlayViewModel.onUndo = nil
         overlayViewModel.onCancel = nil
+        overlayViewModel.onStop = nil
         phase = .idle
         overlayViewModel.state = .ready
         overlayViewModel.processingMessage = nil

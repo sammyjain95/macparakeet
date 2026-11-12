@@ -58,7 +58,6 @@ enum DesignSystem {
 
         // Playback
         static let playbackTrack = Color.primary.opacity(0.08)
-        static let playbackFill = Color.accentColor
 
         // Speaker diarization palette — distinct, readable in both light/dark
         static let transcriptSpeakerLabelAlpha: CGFloat = 0.85
@@ -254,5 +253,29 @@ extension Color {
 extension View {
     func cardShadow(_ style: ShadowStyle) -> some View {
         self.shadow(color: style.color, radius: style.radius, x: 0, y: style.y)
+    }
+}
+
+// MARK: - 28pt Icon Button
+
+/// A bare-icon button with a guaranteed 28×28pt hit target.
+/// Use for glyph-only buttons in dense rows (banners, title bars, popovers)
+/// so the tap target meets the app's 28pt bar without changing the glyph.
+struct IconButton28<Label: View>: View {
+    let action: () -> Void
+    let label: () -> Label
+
+    init(action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
+        self.action = action
+        self.label = label
+    }
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

@@ -226,6 +226,7 @@ struct TranscriptionThumbnailCard<MenuContent: View>: View {
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .layoutPriority(1)
+                    .help(transcription.fileName)
 
                 if transcription.isFavorite {
                     FavoriteStatusMarker()

@@ -45,6 +45,9 @@ struct PortalDropZone: View {
                     .opacity(isDragging ? 0.9 : 0.7)
                     .animation(.easeInOut(duration: 0.3), value: isDragging)
                 }
+                // Fixed 118pt box, matching the YouTube card's orbit hero,
+                // so both card titles sit on the same baseline.
+                .frame(width: 118, height: 118)
 
                 // Call to action
                 Text("Drop a file to transcribe")
@@ -87,7 +90,7 @@ struct PortalDropZone: View {
             }
             .padding(.vertical, DesignSystem.Spacing.xl)
         }
-        .frame(minHeight: 220)
+        .frame(minHeight: 220, maxHeight: .infinity)
         .onDrop(of: [.fileURL], isTargeted: $isDragging) { providers in
             onDrop(providers)
         }
