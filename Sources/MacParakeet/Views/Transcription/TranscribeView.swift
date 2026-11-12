@@ -308,7 +308,7 @@ struct TranscribeView: View {
             }
             .padding(.vertical, DesignSystem.Spacing.xl)
         }
-        .frame(minHeight: 220)
+        .frame(minHeight: 220, maxHeight: .infinity)
     }
 
     /// The platform recognized from the current URL draft (drives the orbit hero).
@@ -352,24 +352,20 @@ struct TranscribeView: View {
                     .lineLimit(2)
                     .textSelection(.enabled)
                 Spacer()
-                Button {
+                IconButton28(action: {
                     NSPasteboard.general.clearContents()
                     // Prefer the rich diagnostic (link + app version) when the
                     // failure came from the URL lane; fall back to the headline.
                     NSPasteboard.general.setString(viewModel.errorDetail ?? error, forType: .string)
-                } label: {
+                }) {
                     Image(systemName: "doc.on.doc")
                         .font(.system(size: 10, weight: .semibold))
                 }
-                .buttonStyle(.plain)
                 .help("Copy full error details")
-                Button {
-                    viewModel.clearError()
-                } label: {
+                IconButton28(action: { viewModel.clearError() }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
                 }
-                .buttonStyle(.plain)
             }
             .foregroundStyle(DesignSystem.Colors.errorRed)
 
@@ -394,13 +390,10 @@ struct TranscribeView: View {
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                 .lineLimit(2)
             Spacer()
-            Button {
-                aiFormatterWarningMessage = nil
-            } label: {
+            IconButton28(action: { aiFormatterWarningMessage = nil }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .buttonStyle(.plain)
             .foregroundStyle(.secondary)
         }
         .padding(DesignSystem.Spacing.md)

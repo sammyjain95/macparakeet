@@ -1,6 +1,7 @@
 import Cocoa
 import Foundation
 import MacParakeetCore
+import OSLog
 
 /// Lightweight global shortcut listener for immediate actions like toggling
 /// meeting recording. Unlike `HotkeyManager`, this does not model hold or
@@ -12,9 +13,19 @@ import MacParakeetCore
 /// for any UI work. `start()` and `stop()` are called from the main thread;
 /// matching state is only touched while no tap is running or from the tap.
 public final class GlobalShortcutManager {
+    private static let logger = Logger(subsystem: "com.macparakeet.app", category: "GlobalShortcutManager")
+
     public var onTrigger: (() -> Void)?
+    /// Fired (on the tap thread; the event is never consumed) when Escape
+    /// is pressed. Set by the Command Mode owner so a live command session
+    /// can be cancelled with Escape; nil by default, so the auxiliary
+    /// managers (meeting/file/YouTube) are unaffected.
+    public var onEscape: (() -> Void)?
 
     private let trigger: HotkeyTrigger
+    /// Owner label for tap-failure diagnostics, e.g. "command mode".
+    /// Nil for the auxiliary managers.
+    private let diagnosticContext: String?
     private var backgroundTap: BackgroundEventTap?
     private var targetModifierWasPressed = false
     private var triggerKeyIsPressed = false
@@ -22,8 +33,9 @@ public final class GlobalShortcutManager {
     private var modifierChordTriggeredDuringPress = false
     private var modifierChordBlockedUntilRelease = false
 
-    public init(trigger: HotkeyTrigger) {
+    public init(trigger: HotkeyTrigger, diagnosticContext: String? = nil) {
         self.trigger = trigger
+        self.diagnosticContext = diagnosticContext
     }
 
     deinit {
@@ -44,11 +56,17 @@ public final class GlobalShortcutManager {
         guard let tap = BackgroundEventTap.start(
             options: .defaultTap,
             eventsOfInterest: eventMask,
+            diagnosticContext: diagnosticContext.map { "\($0) (\(trigger.displayName))" } ?? trigger.displayName,
             handler: { [weak self] type, event in
                 guard let self else { return Unmanaged.passUnretained(event) }
                 return self.handleEvent(type: type, event: event)
             }
         ) else {
+            // A1: log the failure with the trust state instead of
+            // returning false silently.
+            Self.logger.error(
+                "global_shortcut_tap_create_failed trigger=\(self.trigger.displayName, privacy: .public) accessibility_trusted=\(AXIsProcessTrusted(), privacy: .public)"
+            )
             return false
         }
         backgroundTap = tap
@@ -72,6 +90,14 @@ public final class GlobalShortcutManager {
 
     /// Runs on the tap thread.
     func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // C2: offer Escape to the owner (Command Mode cancel) but never
+        // consume it — it must still reach the frontmost app and the
+        // dictation managers' own Escape handling.
+        if type == .keyDown, onEscape != nil,
+           UInt16(event.getIntegerValueField(.keyboardEventKeycode)) == 53 {
+            onEscape?()
+        }
+
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             // `BackgroundEventTap` already re-enabled the tap.
             recoverFromDisabledTap()

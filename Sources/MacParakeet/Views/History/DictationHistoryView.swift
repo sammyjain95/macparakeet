@@ -295,6 +295,8 @@ struct DictationHistoryView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .frame(width: 28, height: 28)
+            .contentShape(Rectangle())
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .frame(height: 44)
@@ -367,6 +369,62 @@ enum DictationTranscriptPresentation {
 
 // MARK: - Card Row View
 
+/// Memoized highlight builder for one history row. The attributed-string
+/// build is O(text) plus a linear search scan, and the row renders the
+/// result twice per body evaluation (layout text + selectable text), so the
+/// last (text, query) result is kept and reused until either input changes.
+/// A reference box held in @State: the row struct is recreated on every
+/// parent evaluation, but the box — and its cached result — survives.
+private final class HighlightedTranscriptCache {
+    private var text: String?
+    private var query: String?
+    private var result: AttributedString?
+
+    func highlightedTranscript(text: String, query: String) -> AttributedString {
+        if self.text == text, self.query == query, let result {
+            return result
+        }
+        let result = Self.buildHighlightedTranscript(text: text, query: query)
+        self.text = text
+        self.query = query
+        self.result = result
+        return result
+    }
+
+    private static func buildHighlightedTranscript(text: String, query: String) -> AttributedString {
+        let attributed = NSMutableAttributedString(string: text)
+        guard !query.isEmpty else { return AttributedString(attributed) }
+
+        let nsText = text as NSString
+        var searchRange = NSRange(location: 0, length: nsText.length)
+        // Apply the alpha inside a dynamic provider so the highlight re-resolves
+        // on light/dark flip. Resolves `accent` under the supplied appearance,
+        // then attaches alpha — keeps `DesignSystem.Colors.accent` as the single
+        // source of truth without snapping to whatever appearance was current
+        // when the attributed string was built.
+        let highlightColor = NSColor(name: nil) { appearance in
+            var resolved = NSColor.clear
+            appearance.performAsCurrentDrawingAppearance {
+                resolved = NSColor(DesignSystem.Colors.accent)
+            }
+            return resolved.withAlphaComponent(0.2)
+        }
+
+        while searchRange.length > 0 {
+            let found = nsText.range(of: query, options: .caseInsensitive, range: searchRange)
+            guard found.location != NSNotFound else { break }
+
+            attributed.addAttribute(.backgroundColor, value: highlightColor, range: found)
+
+            let nextLocation = found.location + max(found.length, 1)
+            guard nextLocation < nsText.length else { break }
+            searchRange = NSRange(location: nextLocation, length: nsText.length - nextLocation)
+        }
+
+        return AttributedString(attributed)
+    }
+}
+
 struct DictationCardRow: View {
     let dictation: Dictation
     var searchText: String = ""
@@ -394,6 +452,12 @@ struct DictationCardRow: View {
     @State private var isHovered = false
     @State private var expandedTranscriptContentHeight: CGFloat = 0
     @State private var transcriptOverflowMeasurement = TranscriptOverflowMeasurement.zero
+    /// Memoizes the highlighted transcript so the O(text) attributed-string
+    /// build runs once per (text, query) instead of on every body
+    /// evaluation (the row renders it twice: layout text + selectable
+    /// text). Held in @State so the box survives the row struct being
+    /// recreated; mutating the box itself never touches SwiftUI state.
+    @State private var highlightCache = HighlightedTranscriptCache()
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
@@ -849,45 +913,20 @@ struct DictationCardRow: View {
     // MARK: - Highlighted Transcript
 
     private var highlightedTranscript: AttributedString {
-        let text = transcriptPlainText
-        let attributed = NSMutableAttributedString(string: text)
-
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return AttributedString(attributed) }
-
-        let nsText = text as NSString
-        var searchRange = NSRange(location: 0, length: nsText.length)
-        // Apply the alpha inside a dynamic provider so the highlight re-resolves
-        // on light/dark flip. Resolves `accent` under the supplied appearance,
-        // then attaches alpha — keeps `DesignSystem.Colors.accent` as the single
-        // source of truth without snapping to whatever appearance was current
-        // when the attributed string was built.
-        let highlightColor = NSColor(name: nil) { appearance in
-            var resolved = NSColor.clear
-            appearance.performAsCurrentDrawingAppearance {
-                resolved = NSColor(DesignSystem.Colors.accent)
-            }
-            return resolved.withAlphaComponent(0.2)
-        }
-
-        while searchRange.length > 0 {
-            let found = nsText.range(of: query, options: .caseInsensitive, range: searchRange)
-            guard found.location != NSNotFound else { break }
-
-            attributed.addAttribute(.backgroundColor, value: highlightColor, range: found)
-
-            let nextLocation = found.location + max(found.length, 1)
-            guard nextLocation < nsText.length else { break }
-            searchRange = NSRange(location: nextLocation, length: nsText.length - nextLocation)
-        }
-
-        return AttributedString(attributed)
+        highlightCache.highlightedTranscript(
+            text: transcriptPlainText,
+            query: searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
     }
 
-    private func formatTime(_ date: Date) -> String {
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private func formatTime(_ date: Date) -> String {
+        Self.timeFormatter.string(from: date)
     }
 
     /// Which AI Formatter profile (or smart default) routed this dictation —

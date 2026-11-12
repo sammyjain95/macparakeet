@@ -3679,7 +3679,7 @@ struct SettingsView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(isHovered ? DesignSystem.Colors.errorRed : DesignSystem.Colors.textTertiary)
-                    .frame(width: 26, height: 24)
+                    .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
                             .fill(isHovered ? DesignSystem.Colors.errorRed.opacity(0.10) : .clear)
@@ -3693,14 +3693,16 @@ struct SettingsView: View {
         }
     }
 
-    /// Roll-up of the three permissions. `.required` if any core gate is
-    /// missing; Screen Recording is only required by meeting source modes that
-    /// capture system audio.
+    /// Roll-up of the core permissions. `.required` if any core gate is
+    /// missing (microphone, Accessibility, or Input Monitoring, which the
+    /// hotkey tap needs alongside Accessibility); Screen Recording is only
+    /// required by meeting source modes that capture system audio.
     private var permissionsCardStatus: SettingsCardStatus? {
         SettingsStatusRules.permissionsCardStatus(
             meetingRecordingEnabled: AppFeatures.meetingRecordingEnabled,
             microphoneGranted: viewModel.microphoneGranted,
             accessibilityGranted: viewModel.accessibilityGranted,
+            inputMonitoringGranted: BackgroundEventTap.isInputMonitoringGranted(),
             screenRecordingGranted: viewModel.screenRecordingGranted,
             meetingAudioSourceMode: viewModel.meetingAudioSourceMode
         )
@@ -3710,6 +3712,9 @@ struct SettingsView: View {
         let permissionsSubtitle = AppFeatures.meetingRecordingEnabled
             ? "Dictation and meetings use these. File transcription does not."
             : "Dictation uses these. File transcription does not."
+        // A3: Input Monitoring is a separate TCC grant from Accessibility;
+        // the hotkey tap fails without it, so it gets its own row.
+        let inputMonitoringGranted = BackgroundEventTap.isInputMonitoringGranted()
 
         return SettingsCard(
             title: "Permissions",
@@ -3740,6 +3745,20 @@ struct SettingsView: View {
                         }
                     }
                     permissionPill(granted: viewModel.accessibilityGranted)
+                }
+
+                Divider()
+
+                permissionStatusRow(
+                    title: "Input Monitoring",
+                    detail: "Global hotkeys listen for key presses."
+                ) {
+                    if !inputMonitoringGranted {
+                        permissionLink("Settings") {
+                            openInputMonitoringSettings()
+                        }
+                    }
+                    permissionPill(granted: inputMonitoringGranted)
                 }
 
                 if AppFeatures.meetingRecordingEnabled {
@@ -4030,7 +4049,8 @@ struct SettingsView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 13, weight: .semibold))
-                                .frame(width: 22, height: 22)
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
                         }
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)
@@ -4039,12 +4059,12 @@ struct SettingsView: View {
                         .accessibilityLabel("More actions")
                     } else if isWorking || status == .checking || status == .repairing || status == .preparing {
                         ParakeetSpinner(.inline)
-                            .frame(width: 22, height: 22)
+                            .frame(width: 28, height: 28)
                     } else {
-                        Color.clear.frame(width: 22, height: 22)
+                        Color.clear.frame(width: 28, height: 28)
                     }
                 }
-                .frame(minWidth: 22, alignment: .trailing)
+                .frame(minWidth: 28, alignment: .trailing)
             }
         }
     }
@@ -4369,6 +4389,67 @@ struct SettingsView: View {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    private func openInputMonitoringSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+/// Microphone header with ViewThatFits stacking (heading + controls side
+/// by side when space allows, stacked when tight). Restored after the UX
+/// polish removed it: `SettingsCaptureLayoutTests` constructs it directly
+/// to assert the stacking geometry. The live Settings capture section uses
+/// `captureMicrophoneStrip` (SettingsCard) instead — reusing this header
+/// there would duplicate the card's own title and status chip — so this
+/// struct is not wired into the visible UI.
+struct SettingsMicrophoneHeader<Controls: View>: View {
+    let microphoneGranted: Bool
+    let statusText: String
+    @ViewBuilder var controls: () -> Controls
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DesignSystem.Spacing.md) {
+                    heading
+                    Spacer(minLength: DesignSystem.Spacing.md)
+                    controls()
+                }
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                    heading
+                    controls()
+                }
+            }
+            Text(statusText)
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var heading: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: "mic")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DesignSystem.Colors.accent)
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(DesignSystem.Colors.accent.opacity(0.12))
+                )
+                .accessibilityHidden(true)
+            Text("Microphone")
+                .font(DesignSystem.Typography.body.weight(.semibold))
+            SettingsStatusChip(
+                status: microphoneGranted ? .ok : .required,
+                label: microphoneGranted ? "Granted" : "Permission required"
+            )
+        }
+        .fixedSize()
     }
 }
 

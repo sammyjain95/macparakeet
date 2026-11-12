@@ -471,6 +471,12 @@ struct StreakHeatmap: View {
         return f
     }()
 
+    private static let monthAbbreviationFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        return f
+    }()
+
     /// VoiceOver-friendly label for a single heatmap cell. Reads like
     /// "May 11, 2026, 3 dictations, 240 words" or "March 5, 2026, no dictations".
     static func accessibilityLabel(for stat: DailyDictationStat, isToday: Bool) -> String {
@@ -565,8 +571,7 @@ struct StreakHeatmap: View {
         let calendar = Calendar.current
         var result: [(col: Int, label: String)] = []
         var lastMonth: Int? = nil
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM"
+        let formatter = Self.monthAbbreviationFormatter
 
         for (idx, column) in columns.enumerated() {
             guard let firstDay = column.compactMap({ $0 }).first else { continue }
@@ -633,13 +638,17 @@ private struct HeatmapTooltipView: View {
         .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 4)
     }
 
+    private static let headlineFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter
+    }()
+
     private var headline: String {
         let cal = Calendar.current
         if cal.isDateInToday(stat.day) { return "Today" }
         if cal.isDateInYesterday(stat.day) { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM d"
-        return formatter.string(from: stat.day)
+        return Self.headlineFormatter.string(from: stat.day)
     }
 
     private var detail: String {

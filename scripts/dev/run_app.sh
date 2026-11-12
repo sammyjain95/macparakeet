@@ -276,3 +276,7 @@ echo "  state: $APP_STATE_DIR"
 echo "  codesign: $CODESIGN_IDENTITY"
 echo "  log: $LOG_FILE"
 echo "  build-log: $BUILD_LOG_FILE"
+# The log above stays empty by construction: `open` detaches the app, so
+# its stdout/stderr never reach $LOG_FILE. App logs (including hotkey
+# tap-create failures) live in the unified log — filter Console.app with:
+echo "  logs: Console.app — predicate: subsystem == \"com.macparakeet.app\""

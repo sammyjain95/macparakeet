@@ -63,10 +63,11 @@ enum SettingsStatusRules {
         meetingRecordingEnabled: Bool,
         microphoneGranted: Bool,
         accessibilityGranted: Bool,
+        inputMonitoringGranted: Bool,
         screenRecordingGranted: Bool,
         meetingAudioSourceMode: MeetingAudioSourceMode
     ) -> SettingsCardStatus {
-        if !microphoneGranted || !accessibilityGranted {
+        if !microphoneGranted || !accessibilityGranted || !inputMonitoringGranted {
             return SettingsCardStatus(.required, label: "Action required")
         }
 

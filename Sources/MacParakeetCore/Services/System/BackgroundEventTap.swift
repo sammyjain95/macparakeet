@@ -1,5 +1,7 @@
+import ApplicationServices
 import CoreGraphics
 import Foundation
+import OSLog
 
 /// The one thread that runs every MacParakeet `CGEvent` tap.
 ///
@@ -84,6 +86,8 @@ private final class PerformBox<T>: @unchecked Sendable {
 public final class BackgroundEventTap: @unchecked Sendable {
     public typealias Handler = (_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>?
 
+    private static let logger = Logger(subsystem: "com.macparakeet.core", category: "BackgroundEventTap")
+
     private let handler: Handler
     // Tap-thread state.
     private var tap: CFMachPort?
@@ -96,16 +100,32 @@ public final class BackgroundEventTap: @unchecked Sendable {
 
     /// Creates and enables the tap on the tap thread. Returns nil when macOS
     /// refuses the tap (usually a missing permission).
+    ///
+    /// `diagnosticContext` names the tap's owner for failure logs (e.g.
+    /// "command mode (Control+Option)"). It never contains user text.
     public static func start(
         options: CGEventTapOptions,
         eventsOfInterest: CGEventMask,
+        diagnosticContext: String? = nil,
         handler: @escaping Handler
     ) -> BackgroundEventTap? {
         let eventTap = BackgroundEventTap(handler: handler)
         let started = EventTapThread.shared.performAndWait {
-            eventTap.install(options: options, eventsOfInterest: eventsOfInterest)
+            eventTap.install(
+                options: options,
+                eventsOfInterest: eventsOfInterest,
+                diagnosticContext: diagnosticContext
+            )
         }
         return started ? eventTap : nil
+    }
+
+    /// Whether macOS has granted this process Input Monitoring (TCC
+    /// `kTCCServiceListenEvent`). Event taps fail to create without it,
+    /// even when Accessibility is granted, so the two grants must be
+    /// checked separately (A3). Read-only: never triggers a prompt.
+    public static func isInputMonitoringGranted() -> Bool {
+        CGPreflightListenEventAccess()
     }
 
     /// Disables and invalidates the tap. Idempotent. After it returns, the
@@ -129,7 +149,8 @@ public final class BackgroundEventTap: @unchecked Sendable {
 
     private func install(
         options: CGEventTapOptions,
-        eventsOfInterest: CGEventMask
+        eventsOfInterest: CGEventMask,
+        diagnosticContext: String? = nil
     ) -> Bool {
         let retained = Unmanaged.passRetained(self)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
@@ -146,6 +167,12 @@ public final class BackgroundEventTap: @unchecked Sendable {
             userInfo: retained.toOpaque()
         ) else {
             retained.release()
+            // A1: a refused tap used to fail silently at every layer.
+            // Log the owner context and the trust state so Console.app
+            // shows which permission is missing instead of nothing.
+            Self.logger.error(
+                "event_tap_create_failed context=\(diagnosticContext ?? "unknown", privacy: .public) accessibility_trusted=\(AXIsProcessTrusted(), privacy: .public)"
+            )
             return false
         }
         tap = created
@@ -165,5 +192,48 @@ public final class BackgroundEventTap: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
         return handler(type, event)
+    }
+}
+
+// MARK: - Tap Failure Diagnostics (A1/A4)
+
+/// A record of the most recent event-tap creation failure. Contains only
+/// the tap owner's label and the process trust state — never user text or
+/// key contents. Read by the app for Settings diagnostics so a refused tap
+/// is visible without opening Console.app.
+public struct HotkeyTapFailure: Sendable, Equatable {
+    /// Owner label, e.g. "command mode (Control+Option)".
+    public let context: String
+    public let accessibilityTrusted: Bool
+    public let date: Date
+
+    public init(context: String, accessibilityTrusted: Bool, date: Date = Date()) {
+        self.context = context
+        self.accessibilityTrusted = accessibilityTrusted
+        self.date = date
+    }
+}
+
+/// Thread-safe holder for the last tap-create failure. Written by the tap
+/// owners on failure; read by the app (Settings diagnostics wiring is
+/// follow-up — the store is the seam it reads).
+public final class LastHotkeyTapFailure: @unchecked Sendable {
+    public static let shared = LastHotkeyTapFailure()
+
+    private let lock = NSLock()
+    private var failure: HotkeyTapFailure?
+
+    private init() {}
+
+    public func record(_ failure: HotkeyTapFailure) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.failure = failure
+    }
+
+    public var current: HotkeyTapFailure? {
+        lock.lock()
+        defer { lock.unlock() }
+        return failure
     }
 }

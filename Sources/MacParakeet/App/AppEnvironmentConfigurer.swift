@@ -540,6 +540,20 @@ final class AppEnvironmentConfigurer {
         hotkeyCoordinator.setupAllHotkeys()
         dictationCoordinator.showIdlePill()
 
+        // Launch hygiene (delete blank dictations, clear audio paths for
+        // deleted files) used to run in the bootstrap task, gating the idle
+        // pill and hotkeys on an O(rows) library scan. It now runs here, in
+        // a background task after the app is interactive; History reloads
+        // when it finishes so no stale row survives the sweep.
+        Task.detached(priority: .utility) { [dbQueue = env.databaseManager.dbQueue] in
+            let dictationRepo = DictationRepository(dbQueue: dbQueue)
+            _ = try? dictationRepo.deleteEmpty()
+            try? dictationRepo.clearMissingAudioPaths()
+            await MainActor.run { [weak self] in
+                self?.historyViewModel.loadDictations()
+            }
+        }
+
         // Calendar auto-start (ADR-017 Phases 1 + 2 — reminders +
         // pre-meeting countdown toast). The coordinator is a no-op when
         // `calendarAutoStartMode == .off` so it's safe to start

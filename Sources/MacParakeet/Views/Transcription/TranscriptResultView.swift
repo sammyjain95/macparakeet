@@ -1003,8 +1003,9 @@ struct TranscriptResultView: View {
                 transcription: transcription,
                 playerViewModel: playerViewModel
             )
-
-            Spacer(minLength: 0)
+            // Grow to fill the column so the action bar sits directly
+            // under the video instead of across a void.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider()
 
@@ -1047,7 +1048,7 @@ struct TranscriptResultView: View {
                             .font(DesignSystem.Typography.caption)
                             .foregroundStyle(DesignSystem.Colors.textSecondary)
                     }
-                    .buttonStyle(.plain)
+                    .parakeetAction(.secondary)
                 }
                 .layoutPriority(1)
             }
@@ -1101,7 +1102,7 @@ struct TranscriptResultView: View {
                                 .font(DesignSystem.Typography.caption)
                                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                         }
-                        .buttonStyle(.plain)
+                        .parakeetAction(.secondary)
                     }
                 }
                 .layoutPriority(1)
@@ -1761,32 +1762,36 @@ struct TranscriptResultView: View {
                     titleView
 
                     if !headerExpanded {
-                        // Inline metadata in collapsed mode
-                        HStack(spacing: 6) {
-                            metadataChip(
-                                icon: sourceChipIcon,
-                                text: sourceChipText,
-                                tint: sourceChipTint,
-                                symbolText: sourceChipSymbolText
-                            )
-
-                            if let durationMs = transcription.durationMs {
+                        // Inline metadata in collapsed mode — horizontally
+                        // scrollable so a long title plus four chips never
+                        // overflows the column at minimum window width.
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
                                 metadataChip(
-                                    icon: "clock", text: durationMs.formattedDuration,
-                                    tint: DesignSystem.Colors.textSecondary)
-                            }
+                                    icon: sourceChipIcon,
+                                    text: sourceChipText,
+                                    tint: sourceChipTint,
+                                    symbolText: sourceChipSymbolText
+                                )
 
-                            if transcriptWordCount > 0 {
-                                metadataChip(
-                                    icon: "text.word.spacing", text: "\(transcriptWordCount.formatted()) words",
-                                    tint: DesignSystem.Colors.textSecondary)
-                            }
+                                if let durationMs = transcription.durationMs {
+                                    metadataChip(
+                                        icon: "clock", text: durationMs.formattedDuration,
+                                        tint: DesignSystem.Colors.textSecondary)
+                                }
 
-                            if speakerCountValue > 0 {
-                                metadataChip(
-                                    icon: "person.2.fill",
-                                    text: "\(speakerCountValue) speaker\(speakerCountValue == 1 ? "" : "s")",
-                                    tint: DesignSystem.Colors.textSecondary)
+                                if transcriptWordCount > 0 {
+                                    metadataChip(
+                                        icon: "text.word.spacing", text: "\(transcriptWordCount.formatted()) words",
+                                        tint: DesignSystem.Colors.textSecondary)
+                                }
+
+                                if speakerCountValue > 0 {
+                                    metadataChip(
+                                        icon: "person.2.fill",
+                                        text: "\(speakerCountValue) speaker\(speakerCountValue == 1 ? "" : "s")",
+                                        tint: DesignSystem.Colors.textSecondary)
+                                }
                             }
                         }
                     }
@@ -1794,11 +1799,16 @@ struct TranscriptResultView: View {
 
                 Spacer(minLength: DesignSystem.Spacing.sm)
 
-                SonicMandalaView(
-                    data: mandalaData,
-                    size: headerExpanded ? 56 : 40,
-                    style: .fullColor
-                )
+                // The fallback radial data reads as a flat orange disc at
+                // the 40pt collapsed size, so the mandala only renders
+                // when the header is expanded.
+                if headerExpanded {
+                    SonicMandalaView(
+                        data: mandalaData,
+                        size: 56,
+                        style: .fullColor
+                    )
+                }
 
                 // Expand/collapse chevron: a real button, so taps on it
                 // (and only it) toggle the header; the rest of the card
@@ -1945,17 +1955,15 @@ struct TranscriptResultView: View {
                     .focused($titleFocused)
                     .onSubmit(commitTitleRename)
 
-                Button(action: commitTitleRename) {
+                IconButton28(action: commitTitleRename) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(DesignSystem.Colors.successGreen)
                 }
-                .buttonStyle(.plain)
 
-                Button(action: cancelTitleRename) {
+                IconButton28(action: cancelTitleRename) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(DesignSystem.Colors.textTertiary)
                 }
-                .buttonStyle(.plain)
             }
         } else {
             HStack(spacing: 8) {
@@ -1970,12 +1978,11 @@ struct TranscriptResultView: View {
                 }
 
                 if canRenameTitle {
-                    Button(action: beginTitleRename) {
+                    IconButton28(action: beginTitleRename) {
                         Image(systemName: "pencil")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
-                    .buttonStyle(.plain)
                     .help(transcription.sourceType == .meeting ? "Rename meeting" : "Rename transcription")
                 }
 
@@ -1984,14 +1991,11 @@ struct TranscriptResultView: View {
                         classification: meetingClassificationViewModel.classification(for: transcription.id)
                     )
 
-                    Button {
-                        classificationTarget = activeTranscription
-                    } label: {
+                    IconButton28(action: { classificationTarget = activeTranscription }) {
                         Image(systemName: "tag")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(DesignSystem.Colors.textTertiary)
                     }
-                    .buttonStyle(.plain)
                     .help("Edit labels")
                     .accessibilityLabel("Edit transcription labels")
                     .meetingClassificationPopover(
@@ -4508,42 +4512,45 @@ struct TranscriptResultView: View {
                     .shadow(color: .black.opacity(isUser ? 0.12 : 0.05), radius: isUser ? 3 : 2, y: 1)
                     .overlay(alignment: .bottomTrailing) {
                         if !isUser && !message.isStreaming && !message.content.isEmpty {
-                            if hoveredMessageId == message.id || copiedMessageId == message.id {
-                                Button {
-                                    TranscriptResultActions.copyText(message.content)
-                                    copiedMessageId = message.id
-                                    copiedResetTask?.cancel()
-                                    copiedResetTask = Task {
-                                        try? await Task.sleep(for: .seconds(2))
-                                        copiedMessageId = nil
-                                    }
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: copiedMessageId == message.id ? "checkmark" : "doc.on.doc")
-                                            .font(.system(size: 10))
-                                        if copiedMessageId == message.id {
-                                            Text("Copied")
-                                                .font(DesignSystem.Typography.micro)
-                                        }
-                                    }
-                                    .foregroundStyle(
-                                        copiedMessageId == message.id
-                                            ? DesignSystem.Colors.successGreen : DesignSystem.Colors.textTertiary
-                                    )
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        Capsule()
-                                            .fill(DesignSystem.Colors.surfaceElevated.opacity(0.85))
-                                            .overlay(
-                                                Capsule().strokeBorder(
-                                                    DesignSystem.Colors.border.opacity(0.3), lineWidth: 0.5))
-                                    )
+                            // Always visible (0.55 at rest, full on hover),
+                            // matching the LiveAsk message actions.
+                            Button {
+                                TranscriptResultActions.copyText(message.content)
+                                copiedMessageId = message.id
+                                copiedResetTask?.cancel()
+                                copiedResetTask = Task {
+                                    try? await Task.sleep(for: .seconds(2))
+                                    copiedMessageId = nil
                                 }
-                                .buttonStyle(.plain)
-                                .transition(.opacity)
-                                .padding(4)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: copiedMessageId == message.id ? "checkmark" : "doc.on.doc")
+                                        .font(.system(size: 10))
+                                    if copiedMessageId == message.id {
+                                        Text("Copied")
+                                            .font(DesignSystem.Typography.micro)
+                                    }
+                                }
+                                .foregroundStyle(
+                                    copiedMessageId == message.id
+                                        ? DesignSystem.Colors.successGreen : DesignSystem.Colors.textTertiary
+                                )
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(DesignSystem.Colors.surfaceElevated.opacity(0.85))
+                                        .overlay(
+                                            Capsule().strokeBorder(
+                                                DesignSystem.Colors.border.opacity(0.3), lineWidth: 0.5))
+                                )
                             }
+                            .buttonStyle(.plain)
+                            .transition(.opacity)
+                            .padding(4)
+                            .opacity(hoveredMessageId == message.id || copiedMessageId == message.id ? 1 : 0.55)
+                            .frame(minWidth: 28, minHeight: 28)
+                            .contentShape(Rectangle())
                         }
                     }
                     .onHover { hovering in

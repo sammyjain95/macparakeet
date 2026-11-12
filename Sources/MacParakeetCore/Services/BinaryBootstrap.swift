@@ -33,6 +33,7 @@ public actor BinaryBootstrap {
     // yt-dlp currently publishes a single macOS binary asset name.
     private static let ytDlpAssetX86 = "yt-dlp_macos"
     private static let ytDlpLatestBaseURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download"
+    private static let ytDlpLatestReleaseAPIURL = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
     private static let ytDlpChecksumsFile = "SHA2-256SUMS"
     private static let ytDlpUpdateInterval: TimeInterval = 7 * 24 * 60 * 60
     private static let ytDlpLastUpdateCheckKey = "ytDlp.lastUpdateCheckAt"
@@ -132,6 +133,14 @@ public actor BinaryBootstrap {
         guard fileManager.isExecutableFile(atPath: binaryPath) else { return }
 
         do {
+            // Skip the full re-download when the installed binary already
+            // matches the latest release. Any failure to determine either
+            // version falls back to the download below (old behavior).
+            if await isYtDlpCurrent(at: binaryPath) {
+                defaults.set(now(), forKey: Self.ytDlpLastUpdateCheckKey)
+                return
+            }
+
             // Re-install from GitHub with checksum verification
             // (same download-verify-replace flow as fresh install)
             try await installYtDlp(at: binaryPath)
@@ -205,6 +214,69 @@ public actor BinaryBootstrap {
             return true
         }
         return now().timeIntervalSince(lastCheck) >= Self.ytDlpUpdateInterval
+    }
+
+    /// True when the installed binary's version matches the latest release
+    /// tag. Any failure to determine either version returns false so the
+    /// caller falls back to the full download (old behavior).
+    private func isYtDlpCurrent(at binaryPath: String) async -> Bool {
+        guard let installed = Self.installedYtDlpVersion(at: binaryPath),
+              let latest = try? await fetchLatestYtDlpReleaseTag()
+        else {
+            return false
+        }
+        return Self.normalizeVersion(installed) == Self.normalizeVersion(latest)
+    }
+
+    /// Runs the installed binary with `--version` (e.g. `2025.10.10`).
+    /// Synchronous subprocess call, matching this file's other blocking
+    /// file work; the caller runs detached at `.utility`.
+    private nonisolated static func installedYtDlpVersion(at path: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = ["--version"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let version = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let version, !version.isEmpty else { return nil }
+        return version
+    }
+
+    /// Fetches the latest release tag (e.g. `2025.10.10`) from the GitHub
+    /// API. Small JSON payload, unlike the full release page.
+    private func fetchLatestYtDlpReleaseTag() async throws -> String {
+        guard let url = URL(string: Self.ytDlpLatestReleaseAPIURL) else {
+            throw BinaryBootstrapError.downloadFailed("Invalid yt-dlp release API URL")
+        }
+        let (data, response) = try await session.data(from: url)
+        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            throw BinaryBootstrapError.downloadFailed("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) from \(url.absoluteString)")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tag = json["tag_name"] as? String, !tag.isEmpty
+        else {
+            throw BinaryBootstrapError.downloadFailed("Could not read latest yt-dlp release tag")
+        }
+        return tag
+    }
+
+    /// Trims whitespace and a leading `v` so `v2025.10.10` and `2025.10.10`
+    /// compare equal.
+    private nonisolated static func normalizeVersion(_ version: String) -> String {
+        var normalized = version.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.hasPrefix("v") || normalized.hasPrefix("V") {
+            normalized.removeFirst()
+        }
+        return normalized
     }
 
     private func installYtDlp(at targetPath: String) async throws {

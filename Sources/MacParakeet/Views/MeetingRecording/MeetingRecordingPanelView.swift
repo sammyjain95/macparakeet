@@ -157,7 +157,7 @@ struct MeetingRecordingPanelView: View {
         let foreground: Color =
             isActive
             ? DesignSystem.Colors.textPrimary
-            : DesignSystem.Colors.textTertiary
+            : DesignSystem.Colors.textSecondary
         let hasTrailing = isStreaming || badge != nil
 
         if hasTrailing || shortcutHint != nil {
@@ -849,7 +849,7 @@ private struct FooterButton: View {
                 .foregroundStyle(foregroundColor)
                 .contentTransition(.symbolEffect(.replace))
                 .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .padding(.vertical, 8)
                 .background(
                     Capsule()
                         .fill(
