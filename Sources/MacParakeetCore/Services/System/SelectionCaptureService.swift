@@ -510,7 +510,9 @@ struct SystemSelectionCaptureBackend: SelectionCaptureBackend, @unchecked Sendab
         guard status == .success, let role = raw as? String else {
             return .unknown
         }
-        if role == (kAXSecureTextFieldRole as String) {
+        // No kAXSecureTextFieldRole constant exists in the SDK; the role
+        // value is the literal "AXSecureTextField".
+        if role == "AXSecureTextField" {
             return .secureField
         }
         return .unknown
